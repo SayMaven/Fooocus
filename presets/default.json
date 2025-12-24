@@ -41,7 +41,7 @@
     "default_aspect_ratio": "1152*896",
     "default_overwrite_step": 25,
     "checkpoint_downloads": {
-        "WAIiLLNSFWSDXLV15.safetensors": "https://civitai.com/api/download/models/2167369?type=Model&format=SafeTensor&size=pruned&fp=fp16&token=6d5979eca3c585f9a91dcd83ded3f3a6"
+        "WAIiLLNSFWSDXLV16.safetensors": "https://civitai.com/api/download/models/2514310?type=Model&format=SafeTensor&size=pruned&fp=fp16&token=6d5979eca3c585f9a91dcd83ded3f3a6"
     },
     "embeddings_downloads": {},
     "lora_downloads": {
