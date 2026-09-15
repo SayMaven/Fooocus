@@ -29,12 +29,10 @@ Dokumen ini berisi pedoman operasional, batasan teknis, dan arsitektur kritis un
 
 ## 3. Catatan Teknis & Gotchas Runtime Modern Google Colab
 
-### A. Instalasi NumPy Cepat (Tanpa Kompilasi Source)
-- **Masalah:** Jika menggunakan `pip install numpy==1.26.4`, pip mengunduh `.tar.gz` dan melakukan kompilasi C/C++ menggunakan Meson/Ninja yang memakan waktu 15–25 menit hingga terlihat *stuck*.
-- **Solusi:** Selalu gunakan argumen biner wheel agar instalasi selesai dalam hitungan detik:
-  ```bash
-  !pip install --only-binary=:all: "numpy<2.0.0"
-  ```
+### A. Kompatibilitas NumPy (`numpy>=1.26.0`)
+- **Masalah Legacy:** Fooocus aslinya mengunci `numpy==1.26.4`. Di Python 3.13 Colab, memaksa downgrade ke `numpy<2.0.0` memicu pip mengunduh `.tar.gz` dan mengompilasi dari source (Meson/Ninja) yang memakan waktu 15–25 menit hingga terlihat *stuck*.
+- **Kebijakan Saat Ini:** Di branch `colab-support`, syarat telah dilonggarkan ke `numpy>=1.26.0` (mendukung NumPy 2.x bawaan Colab).
+- **Aturan:** **JANGAN memaksa downgrade ke `numpy<2.0.0` atau `numpy==1.26.4`**. Biarkan Fooocus memakai NumPy bawaan Colab secara langsung tanpa instalasi ulang.
 
 ### B. Auto-Update Git Tanpa `pygit2`
 - `entry_with_update.py` telah diperbarui menggunakan Git CLI bawaan sistem (`git pull --ff-only`).
