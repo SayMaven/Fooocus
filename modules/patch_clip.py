@@ -25,6 +25,23 @@ from transformers import CLIPTextModel, CLIPTextConfig, modeling_utils, CLIPVisi
 if not hasattr(modeling_utils, "no_init_weights"):
     modeling_utils.no_init_weights = nullcontext
 
+if not hasattr(CLIPTextModel, "text_model"):
+    CLIPTextModel.text_model = property(lambda self: self)
+
+    _orig_clip_load_state_dict = CLIPTextModel.load_state_dict
+
+    def _compat_clip_load_state_dict(self, state_dict, strict=False, **kwargs):
+        new_sd = {}
+        for k, v in state_dict.items():
+            if k.startswith("text_model."):
+                new_sd[k[len("text_model."):]] = v
+            else:
+                new_sd[k] = v
+        return _orig_clip_load_state_dict(self, new_sd, strict=strict, **kwargs)
+
+    CLIPTextModel.load_state_dict = _compat_clip_load_state_dict
+
+
 
 
 def patched_encode_token_weights(self, token_weight_pairs):
