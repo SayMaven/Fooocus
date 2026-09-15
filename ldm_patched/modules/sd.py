@@ -30,6 +30,10 @@ def load_model_weights(model, sd):
             k_flat = k.replace("transformer.text_model.", "transformer.")
             if k_flat in model_keys and k not in model_keys:
                 sd[k_flat] = sd.pop(k)
+            elif k.endswith(".embeddings.position_ids"):
+                sd.pop(k, None)
+        elif k.endswith(".embeddings.position_ids") and k not in model_keys:
+            sd.pop(k, None)
 
     m, u = model.load_state_dict(sd, strict=False)
     m = set(m)
