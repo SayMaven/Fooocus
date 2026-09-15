@@ -40,6 +40,9 @@ args_parser.parser.add_argument("--always-download-new-model", action='store_tru
 args_parser.parser.add_argument("--rebuild-hash-cache", help="Generates missing model and LoRA hashes.",
                                 type=int, nargs="?", metavar="CPU_NUM_THREADS", const=-1)
 
+args_parser.parser.add_argument("--skip-pip", action='store_true',
+                                help="Skip pip requirements and environment checks.")
+
 args_parser.parser.set_defaults(
     disable_cuda_malloc=True,
     in_browser=True,

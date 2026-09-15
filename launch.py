@@ -19,7 +19,7 @@ import platform
 import fooocus_version
 
 from build_launcher import build_launcher
-from modules.launch_util import is_installed, run, python, run_pip, requirements_met, delete_folder_content
+from modules.launch_util import is_installed, run, python, run_pip, requirements_met, get_unmet_requirements, delete_folder_content
 from modules.model_loader import load_file_from_url
 
 REINSTALL_ALL = False
@@ -27,6 +27,11 @@ TRY_INSTALL_XFORMERS = False
 
 
 def prepare_environment():
+    skip_pip = '--skip-pip' in sys.argv or os.environ.get('SKIP_PIP', '0') == '1'
+    if skip_pip:
+        print("[Launch] --skip-pip detected: Skipping torch and requirements verification.")
+        return
+
     torch_index_url = os.environ.get('TORCH_INDEX_URL', "https://download.pytorch.org/whl/cu121")
     torch_command = os.environ.get('TORCH_COMMAND',
                                    f"pip install torch==2.1.0 torchvision==0.16.0 --extra-index-url {torch_index_url}")
@@ -53,8 +58,14 @@ def prepare_environment():
             elif platform.system() == "Linux":
                 run_pip(f"install -U -I --no-deps {xformers_package}", "xformers")
 
-    if REINSTALL_ALL or not requirements_met(requirements_file):
+    if REINSTALL_ALL:
         run_pip(f"install -r \"{requirements_file}\"", "requirements")
+    else:
+        unmet = get_unmet_requirements(requirements_file)
+        if len(unmet) > 0:
+            req_args = " ".join([f'"{req}"' for req in unmet])
+            print(f"[Launch] Installing {len(unmet)} unmet requirements: {unmet}")
+            run_pip(f"install {req_args}", f"unmet requirements ({len(unmet)})")
 
     return
 

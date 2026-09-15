@@ -75,15 +75,20 @@ def run_pip(command, desc=None, live=default_command_live):
         return None
 
 
-def requirements_met(requirements_file):
+def get_unmet_requirements(requirements_file):
+    unmet = []
     with open(requirements_file, "r", encoding="utf8") as file:
         for line in file:
             line = line.strip()
             if line == "" or line.startswith('#'):
                 continue
 
-            requirement = Requirement(line)
-            package = requirement.name
+            try:
+                requirement = Requirement(line)
+                package = requirement.name
+            except Exception as e:
+                print(f"[Requirements] Could not parse requirement '{line}': {e}")
+                continue
 
             try:
                 version_installed = importlib.metadata.version(package)
@@ -91,13 +96,17 @@ def requirements_met(requirements_file):
 
                 # Check if the installed version satisfies the requirement
                 if installed_version not in requirement.specifier:
-                    print(f"Version mismatch for {package}: Installed version {version_installed} does not meet requirement {requirement}")
-                    return False
+                    print(f"[Requirements] Version mismatch for {package}: Installed {version_installed} does not meet {requirement}")
+                    unmet.append(line)
             except Exception as e:
-                print(f"Error checking version for {package}: {e}")
-                return False
+                print(f"[Requirements] Missing package {package}: {e}")
+                unmet.append(line)
 
-    return True
+    return unmet
+
+
+def requirements_met(requirements_file):
+    return len(get_unmet_requirements(requirements_file)) == 0
 
 
 def delete_folder_content(folder, prefix=None):
