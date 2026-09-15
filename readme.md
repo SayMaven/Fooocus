@@ -1,5 +1,5 @@
 <div align=center>
-<img src="https://github.com/Hackertrap/ColabFoocus/blob/a81f2be4fab63f5b9ae49c1b4ef832f4aeaeaee6/assets/image%20-%202025-07-06T171810.943.png">
+<img src="https://raw.githubusercontent.com/SayMaven/ColabFoocus/main/assets/arale.png">
 </div>
 
 # Fooocus
@@ -107,23 +107,21 @@ Note that the [minimal requirement](#minimal-requirement) for different platform
 
 See also the common problems and troubleshoots [here](troubleshoot.md).
 
-### Colab
+### Colab (Modern Runtime Support - SayMaven Fork)
 
-(Last tested - 2024 Aug 12 by [mashb1t](https://github.com/mashb1t))
+This fork is actively maintained on branch `colab-support` for Google Colab's modern runtime (Python 3.13+, CUDA 12.8+, Transformers 5.x, PyTorch 2.11+).
 
-| Colab | Info
-| --- | --- |
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lllyasviel/Fooocus/blob/main/fooocus_colab.ipynb) | Fooocus Official
+**Quick Start in Google Colab:**
+```bash
+%cd /content
+!if [ ! -d "Fooocus" ]; then git clone -b colab-support https://github.com/SayMaven/Fooocus.git; fi
+%cd /content/Fooocus
+!python entry_with_update.py --share --always-high-vram --port 7866
+```
 
-In Colab, you can modify the last line to `!python entry_with_update.py --share --always-high-vram` or `!python entry_with_update.py --share --always-high-vram --preset anime` or `!python entry_with_update.py --share --always-high-vram --preset realistic` for Fooocus Default/Anime/Realistic Edition.
+In Colab, you can also modify the last line to `!python entry_with_update.py --share --always-high-vram --preset anime` or `!python entry_with_update.py --share --always-high-vram --preset realistic` for different presets.
 
-You can also change the preset in the UI. Please be aware that this may lead to timeouts after 60 seconds. If this is the case, please wait until the download has finished, change the preset to initial and back to the one you've selected or reload the page.
-
-Note that this Colab will disable refiner by default because Colab free's resources are relatively limited (and some "big" features like image prompt may cause free-tier Colab to disconnect). We make sure that basic text-to-image is always working on free-tier Colab.
-
-Using `--always-high-vram` shifts resource allocation from RAM to VRAM and achieves the overall best balance between performance, flexibility and stability on the default T4 instance. Please find more information [here](https://github.com/lllyasviel/Fooocus/pull/1710#issuecomment-1989185346).
-
-Thanks to [camenduru](https://github.com/camenduru) for the template!
+Using `--always-high-vram` shifts resource allocation from RAM to VRAM and achieves the overall best balance between performance, flexibility and stability on the default T4 instance.
 
 ### Linux (Using Anaconda)
 
