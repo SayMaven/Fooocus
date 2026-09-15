@@ -291,14 +291,14 @@ default_refiner_switch = get_config_item_or_set_default(
 )
 default_loras_min_weight = get_config_item_or_set_default(
     key='default_loras_min_weight',
-    default_value=-2,
-    validator=lambda x: isinstance(x, numbers.Number) and -10 <= x <= 10,
+    default_value=-10,
+    validator=lambda x: isinstance(x, numbers.Number) and -20 <= x <= 20,
     expected_type=numbers.Number
 )
 default_loras_max_weight = get_config_item_or_set_default(
     key='default_loras_max_weight',
-    default_value=2,
-    validator=lambda x: isinstance(x, numbers.Number) and -10 <= x <= 10,
+    default_value=10,
+    validator=lambda x: isinstance(x, numbers.Number) and -20 <= x <= 20,
     expected_type=numbers.Number
 )
 default_loras = get_config_item_or_set_default(
@@ -345,19 +345,19 @@ default_max_lora_number = get_config_item_or_set_default(
 )
 default_cfg_scale = get_config_item_or_set_default(
     key='default_cfg_scale',
-    default_value=7.0,
+    default_value=5.0,
     validator=lambda x: isinstance(x, numbers.Number),
     expected_type=numbers.Number
 )
 default_sample_sharpness = get_config_item_or_set_default(
     key='default_sample_sharpness',
-    default_value=2.0,
+    default_value=4.0,
     validator=lambda x: isinstance(x, numbers.Number),
     expected_type=numbers.Number
 )
 default_sampler = get_config_item_or_set_default(
     key='default_sampler',
-    default_value='dpmpp_2m_sde_gpu',
+    default_value='euler_ancestral',
     validator=lambda x: x in modules.flags.sampler_list,
     expected_type=str
 )
