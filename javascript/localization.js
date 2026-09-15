@@ -29,7 +29,8 @@ function getTranslation(text) {
         original_lines[text] = 1;
     }
 
-    var tl = localization[text];
+    var loc = window.localization || (typeof localization !== 'undefined' ? localization : {});
+    var tl = loc[text];
     if (tl !== undefined) {
         translated_lines[tl] = 1;
     }
@@ -81,12 +82,23 @@ function refresh_style_localization() {
 }
 
 function refresh_aspect_ratios_label(value) {
-    label = document.querySelector('#aspect_ratios_accordion div span');
-    translation = getTranslation("Aspect Ratios");
-    if (typeof translation == "undefined") {
-        translation = "Aspect Ratios";
+    if (!value) return;
+    var root = typeof gradioApp === "function" ? gradioApp() : document;
+    var label = root.querySelector('#aspect_ratios_accordion .label-wrap span, #aspect_ratios_accordion div span, #aspect_ratios_accordion span');
+    if (!label) {
+        label = document.querySelector('#aspect_ratios_accordion .label-wrap span, #aspect_ratios_accordion div span, #aspect_ratios_accordion span');
     }
-    label.textContent = translation + " " + htmlDecode(value);
+    if (!label) return;
+    var translation = "Aspect Ratios";
+    if (typeof getTranslation === "function") {
+        var t = getTranslation("Aspect Ratios");
+        if (typeof t !== "undefined" && t) {
+            translation = t;
+        }
+    }
+    var decoded = typeof htmlDecode === "function" ? htmlDecode(value) : value.replace(/<[^>]*>/g, '');
+    decoded = decoded.replace(/\u2223|∤/g, '|').trim();
+    label.textContent = translation + " (" + decoded + ")";
 }
 
 function localizeWholePage() {

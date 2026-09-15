@@ -568,15 +568,28 @@ with shared.gradio_root:
                                                  value=modules.config.default_performance,
                                                  elem_classes=['performance_selection'])
 
-                with gr.Accordion(label='Aspect Ratios', open=False, elem_id='aspect_ratios_accordion') as aspect_ratios_accordion:
+                import re
+                default_ar_clean = re.sub(r'<.*?>', '', modules.config.default_aspect_ratio or '').strip()
+                default_ar_clean = default_ar_clean.replace('\U00002223', '|').replace('∤', '|').strip()
+                initial_ar_label = f'Aspect Ratios ({default_ar_clean})' if default_ar_clean else 'Aspect Ratios'
+
+                with gr.Accordion(label=initial_ar_label, open=False, elem_id='aspect_ratios_accordion') as aspect_ratios_accordion:
                     aspect_ratios_selection = gr.Radio(label='Aspect Ratios', show_label=False,
                                                        choices=modules.config.available_aspect_ratios_labels,
                                                        value=modules.config.default_aspect_ratio,
                                                        info='width × height',
                                                        elem_classes='aspect_ratios')
 
-                    aspect_ratios_selection.change(lambda x: None, inputs=aspect_ratios_selection, queue=False, show_progress=False, _js='(x)=>{refresh_aspect_ratios_label(x);}')
-                    shared.gradio_root.load(lambda x: None, inputs=aspect_ratios_selection, queue=False, show_progress=False, _js='(x)=>{refresh_aspect_ratios_label(x);}')
+                    def change_aspect_ratio(text):
+                        cleaned_text = re.sub(r'<.*?>', '', text or '').strip()
+                        cleaned_text = cleaned_text.replace('\U00002223', '|').replace('∤', '|').strip()
+                        base_label = modules.localization.current_translation.get("Aspect Ratios", "Aspect Ratios")
+                        if cleaned_text:
+                            return gr.update(label=f'{base_label} ({cleaned_text})')
+                        return gr.update(label=base_label)
+
+                    aspect_ratios_selection.change(change_aspect_ratio, inputs=aspect_ratios_selection, outputs=aspect_ratios_accordion, queue=False, show_progress=False, _js='(x)=>{refresh_aspect_ratios_label(x);}')
+                    shared.gradio_root.load(change_aspect_ratio, inputs=aspect_ratios_selection, outputs=aspect_ratios_accordion, queue=False, show_progress=False, _js='(x)=>{refresh_aspect_ratios_label(x);}')
 
                 image_number = gr.Slider(label='Image Number', minimum=1, maximum=modules.config.default_max_image_number, step=1, value=modules.config.default_image_number)
 
