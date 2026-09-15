@@ -160,43 +160,46 @@ def load_lora(lora, to_load):
     return patch_dict
 
 def model_lora_keys_clip(model, key_map={}):
-    sdk = model.state_dict().keys()
+    sdk = set(model.state_dict().keys())
 
     text_model_lora_key = "lora_te_text_model_encoder_layers_{}_{}"
     clip_l_present = False
     for b in range(32): #TODO: clean up
         for c in LORA_CLIP_MAP:
             k = "clip_h.transformer.text_model.encoder.layers.{}.{}.weight".format(b, c)
-            if k in sdk:
+            target_k = k if k in sdk else (k.replace(".transformer.text_model.", ".transformer.") if k.replace(".transformer.text_model.", ".transformer.") in sdk else None)
+            if target_k is not None:
                 lora_key = text_model_lora_key.format(b, LORA_CLIP_MAP[c])
-                key_map[lora_key] = k
+                key_map[lora_key] = target_k
                 lora_key = "lora_te1_text_model_encoder_layers_{}_{}".format(b, LORA_CLIP_MAP[c])
-                key_map[lora_key] = k
+                key_map[lora_key] = target_k
                 lora_key = "text_encoder.text_model.encoder.layers.{}.{}".format(b, c) #diffusers lora
-                key_map[lora_key] = k
+                key_map[lora_key] = target_k
 
             k = "clip_l.transformer.text_model.encoder.layers.{}.{}.weight".format(b, c)
-            if k in sdk:
+            target_k = k if k in sdk else (k.replace(".transformer.text_model.", ".transformer.") if k.replace(".transformer.text_model.", ".transformer.") in sdk else None)
+            if target_k is not None:
                 lora_key = text_model_lora_key.format(b, LORA_CLIP_MAP[c])
-                key_map[lora_key] = k
+                key_map[lora_key] = target_k
                 lora_key = "lora_te1_text_model_encoder_layers_{}_{}".format(b, LORA_CLIP_MAP[c]) #SDXL base
-                key_map[lora_key] = k
+                key_map[lora_key] = target_k
                 clip_l_present = True
                 lora_key = "text_encoder.text_model.encoder.layers.{}.{}".format(b, c) #diffusers lora
-                key_map[lora_key] = k
+                key_map[lora_key] = target_k
 
             k = "clip_g.transformer.text_model.encoder.layers.{}.{}.weight".format(b, c)
-            if k in sdk:
+            target_k = k if k in sdk else (k.replace(".transformer.text_model.", ".transformer.") if k.replace(".transformer.text_model.", ".transformer.") in sdk else None)
+            if target_k is not None:
                 if clip_l_present:
                     lora_key = "lora_te2_text_model_encoder_layers_{}_{}".format(b, LORA_CLIP_MAP[c]) #SDXL base
-                    key_map[lora_key] = k
+                    key_map[lora_key] = target_k
                     lora_key = "text_encoder_2.text_model.encoder.layers.{}.{}".format(b, c) #diffusers lora
-                    key_map[lora_key] = k
+                    key_map[lora_key] = target_k
                 else:
                     lora_key = "lora_te_text_model_encoder_layers_{}_{}".format(b, LORA_CLIP_MAP[c]) #TODO: test if this is correct for SDXL-Refiner
-                    key_map[lora_key] = k
+                    key_map[lora_key] = target_k
                     lora_key = "text_encoder.text_model.encoder.layers.{}.{}".format(b, c) #diffusers lora
-                    key_map[lora_key] = k
+                    key_map[lora_key] = target_k
 
     return key_map
 

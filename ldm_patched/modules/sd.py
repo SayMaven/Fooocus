@@ -23,6 +23,14 @@ import ldm_patched.modules.supported_models_base
 import ldm_patched.taesd.taesd
 
 def load_model_weights(model, sd):
+    model_keys = set(model.state_dict().keys())
+    sd_keys = list(sd.keys())
+    for k in sd_keys:
+        if "transformer.text_model." in k:
+            k_flat = k.replace("transformer.text_model.", "transformer.")
+            if k_flat in model_keys and k not in model_keys:
+                sd[k_flat] = sd.pop(k)
+
     m, u = model.load_state_dict(sd, strict=False)
     m = set(m)
     unexpected_keys = set(u)
