@@ -1,11 +1,11 @@
 {
     "default_model": "WAIiLLNSFWSDXLV16.safetensors",
-    "default_refiner": "WAIiLLNSFWSDXLV16.safetensors",
-    "default_refiner_switch": 0.9,
+    "default_refiner": "None",
+    "default_refiner_switch": 0.0,
     "default_loras": [
         [
             true,
-            "HiuraMihate.safetensors",
+            "NakamachiArale.safetensors",
             1.0
         ],
         [
@@ -29,29 +29,32 @@
             1.0
         ]
     ],
-    "default_cfg_scale": 7.0,
-    "default_sample_sharpness": 4.0,
+    "default_cfg_scale": 4.0,
+    "default_sample_sharpness": 8.0,
     "default_sampler": "euler_ancestral",
     "default_scheduler": "karras",
     "default_performance": "Speed",
-    "default_prompt": "Smooth_Quality, masterpiece, best quality, 8k, ultra quality, beautiful, ultra detailed, absurdres, very_detailed, extremely_detailed, ultra_detailed, anime coloring, Anime key visual,Smooth_Quality, cel shading, hard shadows, simple shading, Anime key visual, diffuse lighting, ultra-detailed, high resolution, Highly Visible, sharp focus, beautiful, perfect lighting, dynamic lighting, ",
-    "default_prompt_negative": "bad quality,worst quality,worst detail,sketch,censor,Smooth_Negative, Smooth_Negative-neg, ",
-    "default_styles": [
-    ],
+    "default_prompt": "Smooth_Quality, masterpiece,best quality,amazing quality, lazypos, (cel shading:1.2), soft ambient lighting, no visible light source, even illumination, soft shadows, anime lighting, bright colors, natural color grading, ",
+    "default_prompt_negative": "bad quality,worst quality,worst detail,sketch,censor,Smooth_Negative, Smooth_Negative-neg, lazyneg, lazyhand,",
+    "default_styles": [],
     "default_aspect_ratio": "1152*896",
     "default_overwrite_step": 30,
     "checkpoint_downloads": {
         "WAIiLLNSFWSDXLV16.safetensors": "https://civitai.com/api/download/models/2514310?type=Model&format=SafeTensor&size=pruned&fp=fp16&token=6d5979eca3c585f9a91dcd83ded3f3a6"
     },
-    "embeddings_downloads": {},
-    "lora_downloads": {
-        "HiuraMihate.safetensors": "https://civitai.com/api/download/models/1826280?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6"
+    "embeddings_downloads": {
+        "SmoothPositiveIllus+.safetensors": "https://civitai.com/api/download/models/1470551?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "SmoothNegativeIllus.safetensors": "https://civitai.com/api/download/models/1195487?type=Negative&format=Other&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "LazyNegV2.safetensors": "https://civitai.red/api/download/models/1591915?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "LazyHand.safetensors": "https://civitai.red/api/download/models/2268235?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "LazyPos.safetensors": "https://civitai.red/api/download/models/1833157?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6"
     },
-    "previous_default_models": [
-        "juggernautXL_version8Rundiffusion.safetensors",
-        "juggernautXL_version7Rundiffusion.safetensors",
-        "juggernautXL_v7Rundiffusion.safetensors",
-        "juggernautXL_version6Rundiffusion.safetensors",
-        "juggernautXL_v6Rundiffusion.safetensors"
-    ]
+    "lora_downloads": {
+        "NakamachiArale.safetensors": "https://civitai.red/api/download/models/3235723?fileId=3118128&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "Anime_In_real.safetensors": "https://civitai.com/api/download/models/2240633?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "DynamicPosesSlider.safetensors": "https://civitai.com/api/download/models/1607510?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "Sarturasi.safetensors": "https://civitai.com/api/download/models/1227749?fileId=1133148&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "ColorTemp.safetensors": "https://civitai.com/api/download/models/1227713?fileId=1133115&token=6d5979eca3c585f9a91dcd83ded3f3a6"
+    },
+    "previous_default_models": []
 }
