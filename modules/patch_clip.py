@@ -18,8 +18,13 @@ import ldm_patched.modules.sd1_clip
 import ldm_patched.modules.clip_vision
 import ldm_patched.modules.ops as ops
 
+from contextlib import nullcontext
 from modules.ops import use_patched_ops
 from transformers import CLIPTextModel, CLIPTextConfig, modeling_utils, CLIPVisionConfig, CLIPVisionModelWithProjection
+
+if not hasattr(modeling_utils, "no_init_weights"):
+    modeling_utils.no_init_weights = nullcontext
+
 
 
 def patched_encode_token_weights(self, token_weight_pairs):
