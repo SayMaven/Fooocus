@@ -605,7 +605,7 @@ def _get_anima_reference_model(model):
 
     # Force ComfyUI to evaluate CFG (positive & negative) sequentially with batch_size=1
     # on VRAM-constrained GPUs (<= 18 GB like Tesla T4), cutting peak DiT self-attention memory in half
-    # and preventing CUDA OOM during Upscale 1.5x / 2x.
+    # and preventing CUDA OOM / allocator freeze during Upscale 1.5x / 2x.
     try:
         base_model_obj = out_model.model
         orig_mem_req = getattr(base_model_obj, "_orig_memory_required", None)
@@ -618,17 +618,14 @@ def _get_anima_reference_model(model):
                 cond_shapes = {}
             batch = input_shape[0] if len(input_shape) > 0 else 1
             if batch > 1:
-                dev = getattr(base_model_obj, "load_device", None)
-                if dev is not None and dev.type == "cuda":
-                    total_vram = torch.cuda.get_device_properties(dev).total_memory
-                    if total_vram <= 20 * (1024**3):
-                        return 1e12
+                return 1e12
             try:
                 return orig_mem_req(input_shape, cond_shapes=cond_shapes)
             except Exception:
                 return 0
 
         base_model_obj.memory_required = _anima_memory_required
+        print("[AnimaSampler] Sequential CFG batching enabled (batch=1 mode to protect VRAM)")
     except Exception as e:
         pass
 
