@@ -33,6 +33,9 @@ opFreeU = FreeU_V2()
 opModelSamplingDiscrete = ModelSamplingDiscrete()
 opModelSamplingContinuousEDM = ModelSamplingContinuousEDM()
 
+_anima_reference_sampler_cache = {}
+_anima_reference_sampler_announced = set()
+
 
 class StableDiffusionModel:
     def __init__(self, unet=None, vae=None, clip=None, clip_vision=None, filename=None, vae_filename=None):
@@ -149,6 +152,168 @@ def load_model(ckpt_filename, vae_filename=None):
     return StableDiffusionModel(unet=unet, clip=clip, vae=vae, clip_vision=clip_vision, filename=ckpt_filename, vae_filename=vae_filename)
 
 
+def _is_anima_model_patcher(model):
+    return hasattr(model, "model") and model.model.__class__.__name__ == "Anima"
+
+
+_COMFY_AIMDO_STUBS = {
+    "__init__.py": (
+        '"""Lightweight stubs for optional ComfyUI AIMDO integrations.\n\n'
+        'These placeholders are enough for the Anima sampler reference path,\n'
+        'which only needs the Python imports to succeed.\n'
+        '"""\n'
+    ),
+    "host_buffer.py": (
+        '"""Host buffer stub used when AIMDO is unavailable."""\n\n\n'
+        'class HostBuffer:\n'
+        '    def __init__(self, size):\n'
+        '        self.size = int(size)\n'
+    ),
+    "model_vbar.py": (
+        '"""No-op fallback for the optional AIMDO virtual BAR helpers."""\n\n\n'
+        'class ModelVBAR:\n'
+        '    def __init__(self, size, device_index=None):\n'
+        '        self.size = int(size)\n'
+        '        self.device_index = device_index\n\n'
+        '    def loaded_size(self):\n'
+        '        return 0\n\n'
+        '    def prioritize(self):\n'
+        '        return None\n\n\n'
+        'def vbar_fault(_vbar):\n'
+        '    return None\n\n\n'
+        'def vbar_signature_compare(_signature, _other_signature):\n'
+        '    return True\n\n\n'
+        'def vbar_unpin(_vbar):\n'
+        '    return None\n\n\n'
+        'def vbars_analyze():\n'
+        '    return 0\n\n\n'
+        'def vbars_reset_watermark_limits():\n'
+        '    return None\n'
+    ),
+    "torch.py": (
+        '"""Torch bridge stubs for optional AIMDO integrations."""\n\n'
+        'import torch\n\n\n'
+        'def aimdo_to_tensor(_vbar, device):\n'
+        '    return torch.empty(0, device=device)\n\n\n'
+        'def hostbuf_to_tensor(hostbuf):\n'
+        '    return torch.empty(hostbuf.size, dtype=torch.uint8)\n'
+    ),
+    "vram_buffer.py": (
+        '"""VRAM buffer stub used when AIMDO is unavailable."""\n\n\n'
+        'class VRAMBuffer:\n'
+        '    def __init__(self, size, device_index=None):\n'
+        '        self.size = int(size)\n'
+        '        self.device_index = device_index\n'
+    ),
+}
+
+
+def _default_anima_comfy_root():
+    if os.path.isdir("/content"):
+        return "/content/ComfyUI"
+    fooocus_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(fooocus_root, "comfyui_tmp")
+
+
+def _bootstrap_anima_comfy_reference(comfy_root):
+    import subprocess as _sp
+    comfy_sd = os.path.join(comfy_root, "comfy", "sd.py")
+    if not os.path.exists(comfy_sd):
+        parent = os.path.dirname(comfy_root) or "."
+        os.makedirs(parent, exist_ok=True)
+        print(f"[Anima] Cloning ComfyUI reference into {comfy_root} (shallow clone)...")
+        _sp.run(
+            ["git", "clone", "--depth", "1",
+             "https://github.com/comfyanonymous/ComfyUI.git", comfy_root],
+            check=True,
+        )
+    stub_dir = os.path.join(comfy_root, "comfy_aimdo")
+    os.makedirs(stub_dir, exist_ok=True)
+    for name, body in _COMFY_AIMDO_STUBS.items():
+        target = os.path.join(stub_dir, name)
+        if not os.path.exists(target):
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(body)
+    os.environ["FOOOCUS_ANIMA_COMFY_ROOT"] = comfy_root
+    print(f"[Anima] FOOOCUS_ANIMA_COMFY_ROOT={comfy_root}")
+    return comfy_root
+
+
+def _get_anima_reference_comfy_root(auto_bootstrap=False):
+    fooocus_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates = [
+        os.environ.get("FOOOCUS_ANIMA_COMFY_ROOT"),
+        "/content/ComfyUI",
+        os.path.join(fooocus_root, "comfyui_tmp"),
+    ]
+    for root in candidates:
+        if not root:
+            continue
+        if not os.path.exists(os.path.join(root, "comfy", "sd.py")):
+            continue
+        if any(not os.path.exists(os.path.join(root, "comfy_aimdo", name))
+               for name in _COMFY_AIMDO_STUBS):
+            continue
+        return root
+    if auto_bootstrap:
+        try:
+            return _bootstrap_anima_comfy_reference(_default_anima_comfy_root())
+        except Exception as e:
+            print(f"[Anima] Failed to auto-bootstrap ComfyUI reference: {e}")
+    return None
+
+
+def _load_anima_reference_modules():
+    comfy_root = _get_anima_reference_comfy_root()
+    if comfy_root is None:
+        return None, None
+    if comfy_root not in sys.path:
+        sys.path.insert(0, comfy_root)
+    import comfy.sample
+    import comfy.sd
+
+    return comfy.sample, comfy.sd
+
+
+def _get_anima_reference_model(model):
+    ckpt_filename = getattr(model, "model_file", None)
+    if not ckpt_filename:
+        return None
+
+    comfy_sample, comfy_sd = _load_anima_reference_modules()
+    if comfy_sample is None or comfy_sd is None:
+        return None
+
+    cached = _anima_reference_sampler_cache.get(ckpt_filename)
+    if cached is not None:
+        return cached
+
+    comfy_model, _clip, _vae, _clipvision = comfy_sd.load_checkpoint_guess_config(
+        ckpt_filename,
+        output_vae=False,
+        output_clip=False,
+        output_clipvision=False,
+        embedding_directory=path_embeddings,
+    )
+    _anima_reference_sampler_cache[ckpt_filename] = comfy_model
+    return comfy_model
+
+
+def _can_use_anima_reference_sampler(model, refiner):
+    if refiner is not None:
+        return False
+    if not _is_anima_model_patcher(model):
+        return False
+    if getattr(model, "patches", {}):
+        return False
+    # Auto-bootstrap the ComfyUI reference checkout the first time we hit this for an Anima model.
+    # Fooocus' standard sampler does not support Anima's 5D (B,C,T,H,W) latents, so without
+    # this the run crashes in anisotropic.adaptive_anisotropic_filter.
+    if _get_anima_reference_comfy_root(auto_bootstrap=True) is None:
+        return False
+    return True
+
+
 @torch.no_grad()
 @torch.inference_mode()
 def generate_empty_latent(width=1024, height=1024, batch_size=1):
@@ -225,6 +390,13 @@ def get_previewer(model):
     global VAE_approx_models
 
     from modules.config import path_vae_approx
+
+    # Skip preview for models with non-4-channel latents (e.g., Anima with 16ch)
+    if hasattr(model, 'model') and hasattr(model.model, 'latent_format'):
+        latent_channels = getattr(model.model.latent_format, 'latent_channels', 4)
+        if latent_channels != 4:
+            return None
+
     is_sdxl = isinstance(model.model.latent_format, ldm_patched.modules.latent_formats.SDXL)
     vae_approx_filename = os.path.join(path_vae_approx, 'xlvaeapp.pth' if is_sdxl else 'vaeapp_sd15.pth')
 
@@ -302,6 +474,41 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
             callback_function(previewer_start + step, x0, x, previewer_end, y)
 
     disable_pbar = False
+
+    if _can_use_anima_reference_sampler(model, refiner):
+        comfy_sample, _comfy_sd = _load_anima_reference_modules()
+        reference_model = _get_anima_reference_model(model)
+        if reference_model is not None and comfy_sample is not None:
+            model_file = getattr(model, "model_file", "<unknown>")
+            if model_file not in _anima_reference_sampler_announced:
+                comfy_root = _get_anima_reference_comfy_root()
+                print(f"[AnimaSampler] Using Comfy reference sampler from {comfy_root}")
+                _anima_reference_sampler_announced.add(model_file)
+            samples = comfy_sample.sample(
+                model=reference_model,
+                noise=noise,
+                steps=steps,
+                cfg=cfg,
+                sampler_name=sampler_name,
+                scheduler=scheduler,
+                positive=positive,
+                negative=negative,
+                latent_image=latent_image,
+                denoise=denoise,
+                disable_noise=disable_noise,
+                start_step=start_step,
+                last_step=last_step,
+                force_full_denoise=force_full_denoise,
+                noise_mask=noise_mask,
+                sigmas=sigmas,
+                callback=callback,
+                disable_pbar=disable_pbar,
+                seed=seed,
+            )
+            out = latent.copy()
+            out["samples"] = samples
+            return out
+
     modules.sample_hijack.current_refiner = refiner
     modules.sample_hijack.refiner_switch_step = refiner_switch
     ldm_patched.modules.samplers.sample = modules.sample_hijack.sample_hacked

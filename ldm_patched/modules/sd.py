@@ -22,6 +22,20 @@ import ldm_patched.t2ia.adapter
 import ldm_patched.modules.supported_models_base
 import ldm_patched.taesd.taesd
 
+def detect_unet_prefix(sd):
+    marker_suffixes = [
+        "llm_adapter.blocks.0.cross_attn.q_proj.weight",
+        "x_embedder.proj.1.weight",
+        "input_blocks.0.0.weight",
+    ]
+
+    for suffix in marker_suffixes:
+        for key in sd.keys():
+            if key.endswith(suffix):
+                return key[:-len(suffix)]
+
+    return ""
+
 def load_model_weights(model, sd):
     model_keys = set(model.state_dict().keys())
     sd_keys = list(sd.keys())
@@ -180,15 +194,36 @@ class VAE:
                                                             decoder_config={'target': "ldm_patched.ldm.modules.temporal_ae.VideoDecoder", 'params': decoder_config})
             elif "taesd_decoder.1.weight" in sd:
                 self.first_stage_model = ldm_patched.taesd.taesd.TAESD()
+            elif "decoder.head.0.gamma" in sd:
+                # Wan21-style VAE (used by Anima and similar models)
+                from ldm_patched.ldm.anima.vae import WanVAE
+                dim = sd["decoder.head.0.gamma"].shape[0]
+                self.latent_channels = 16
+                self.latent_dim = 3
+                self.downscale_ratio = 8
+                ddconfig = {"dim": dim, "z_dim": self.latent_channels, "dim_mult": [1, 2, 4, 4], "num_res_blocks": 2, "attn_scales": [], "temperal_downsample": [False, True, True], "dropout": 0.0}
+                self.first_stage_model = WanVAE(**ddconfig)
+                self.memory_used_decode = lambda shape, dtype: (2200 * shape[-2] * shape[-1] * (8*8)) * model_management.dtype_size(dtype)
+                self.memory_used_encode = lambda shape, dtype: (1500 * shape[-2] * shape[-1]) * model_management.dtype_size(dtype)
             else:
                 #default SD1.x/SD2.x VAE parameters
-                ddconfig = {'double_z': True, 'z_channels': 4, 'resolution': 256, 'in_channels': 3, 'out_ch': 3, 'ch': 128, 'ch_mult': [1, 2, 4, 4], 'num_res_blocks': 2, 'attn_resolutions': [], 'dropout': 0.0}
+                z_channels = 4
+                embed_dim = 4
+                if 'post_quant_conv.weight' in sd:
+                    z_channels = sd['post_quant_conv.weight'].shape[0]
+                    embed_dim = sd['post_quant_conv.weight'].shape[1]
+                elif 'decoder.conv_in.weight' in sd:
+                    z_channels = sd['decoder.conv_in.weight'].shape[1]
+                    embed_dim = z_channels
+
+                ddconfig = {'double_z': True, 'z_channels': z_channels, 'resolution': 256, 'in_channels': 3, 'out_ch': 3, 'ch': 128, 'ch_mult': [1, 2, 4, 4], 'num_res_blocks': 2, 'attn_resolutions': [], 'dropout': 0.0}
 
                 if 'encoder.down.2.downsample.conv.weight' not in sd: #Stable diffusion x4 upscaler VAE
                     ddconfig['ch_mult'] = [1, 2, 4]
                     self.downscale_ratio = 4
 
-                self.first_stage_model = AutoencoderKL(ddconfig=ddconfig, embed_dim=4)
+                self.first_stage_model = AutoencoderKL(ddconfig=ddconfig, embed_dim=embed_dim)
+                self.latent_channels = z_channels
         else:
             self.first_stage_model = AutoencoderKL(**(config['params']))
         self.first_stage_model = self.first_stage_model.eval()
@@ -241,20 +276,28 @@ class VAE:
 
     def decode(self, samples_in):
         try:
+            if self.latent_dim == 3 and samples_in.ndim == 4:
+                samples_in = samples_in.unsqueeze(2)
+
             memory_used = self.memory_used_decode(samples_in.shape, self.vae_dtype)
             model_management.load_models_gpu([self.patcher], memory_required=memory_used)
             free_memory = model_management.get_free_memory(self.device)
             batch_number = int(free_memory / memory_used)
             batch_number = max(1, batch_number)
 
-            pixel_samples = torch.empty((samples_in.shape[0], 3, round(samples_in.shape[2] * self.downscale_ratio), round(samples_in.shape[3] * self.downscale_ratio)), device=self.output_device)
+            pixel_samples = None
             for x in range(0, samples_in.shape[0], batch_number):
                 samples = samples_in[x:x+batch_number].to(self.vae_dtype).to(self.device)
-                pixel_samples[x:x+batch_number] = torch.clamp((self.first_stage_model.decode(samples).to(self.output_device).float() + 1.0) / 2.0, min=0.0, max=1.0)
+                out = torch.clamp((self.first_stage_model.decode(samples).to(self.output_device).float() + 1.0) / 2.0, min=0.0, max=1.0)
+                if pixel_samples is None:
+                    pixel_samples = torch.empty((samples_in.shape[0],) + tuple(out.shape[1:]), device=self.output_device, dtype=out.dtype)
+                pixel_samples[x:x+batch_number].copy_(out)
         except model_management.OOM_EXCEPTION as e:
             print("Warning: Ran out of memory when regular VAE decoding, retrying with tiled VAE decoding.")
             pixel_samples = self.decode_tiled_(samples_in)
 
+        if self.latent_dim == 3 and pixel_samples.ndim == 5 and pixel_samples.shape[2] == 1:
+            pixel_samples = pixel_samples.squeeze(2)
         pixel_samples = pixel_samples.to(self.output_device).movedim(1,-1)
         return pixel_samples
 
@@ -439,6 +482,20 @@ def load_checkpoint(config_path=None, ckpt_path=None, output_vae=True, output_cl
 
     return (ldm_patched.modules.model_patcher.ModelPatcher(model, load_device=model_management.get_torch_device(), offload_device=offload_device), clip, vae)
 
+def _find_anima_vae(ckpt_path):
+    """Search for the Anima VAE file near the checkpoint."""
+    import os
+    ckpt_dir = os.path.dirname(ckpt_path)
+    base_dir = os.path.dirname(ckpt_dir)  # models/ parent
+    candidates = [
+        os.path.join(base_dir, 'vae', 'qwen_image_vae.safetensors'),
+        os.path.join(ckpt_dir, 'qwen_image_vae.safetensors'),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
 def load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, output_clipvision=False, embedding_directory=None, output_model=True, vae_filename_param=None):
     sd = ldm_patched.modules.utils.load_torch_file(ckpt_path)
     sd_keys = sd.keys()
@@ -450,7 +507,8 @@ def load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, o
     model_patcher = None
     clip_target = None
 
-    parameters = ldm_patched.modules.utils.calculate_parameters(sd, "model.diffusion_model.")
+    unet_prefix = detect_unet_prefix(sd)
+    parameters = ldm_patched.modules.utils.calculate_parameters(sd, unet_prefix)
     unet_dtype = model_management.unet_dtype(model_params=parameters)
     load_device = model_management.get_torch_device()
     manual_cast_dtype = model_management.unet_manual_cast(unet_dtype, load_device)
@@ -458,7 +516,7 @@ def load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, o
     class WeightsLoader(torch.nn.Module):
         pass
 
-    model_config = model_detection.model_config_from_unet(sd, "model.diffusion_model.", unet_dtype)
+    model_config = model_detection.model_config_from_unet(sd, unet_prefix, unet_dtype)
     model_config.set_manual_cast(manual_cast_dtype)
 
     if model_config is None:
@@ -471,17 +529,29 @@ def load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, o
     if output_model:
         inital_load_device = model_management.unet_inital_load_device(parameters, unet_dtype)
         offload_device = model_management.unet_offload_device()
-        model = model_config.get_model(sd, "model.diffusion_model.", device=inital_load_device)
-        model.load_model_weights(sd, "model.diffusion_model.")
+        model = model_config.get_model(sd, unet_prefix, device=inital_load_device)
+        model.load_model_weights(sd, unet_prefix)
 
     if output_vae:
         if vae_filename_param is None:
             vae_sd = ldm_patched.modules.utils.state_dict_prefix_replace(sd, {"first_stage_model.": ""}, filter_keys=True)
             vae_sd = model_config.process_vae_state_dict(vae_sd)
+            if len(vae_sd) > 0:
+                vae = VAE(sd=vae_sd)
+            else:
+                # Auto-detect separate VAE file for models like Anima
+                auto_vae = _find_anima_vae(ckpt_path) if hasattr(model_config, '__class__') and model_config.__class__.__name__ == 'Anima' else None
+                if auto_vae is not None:
+                    vae_sd = ldm_patched.modules.utils.load_torch_file(auto_vae)
+                    vae = VAE(sd=vae_sd)
+                    vae_filename = auto_vae
+                    print(f"Auto-loaded Anima VAE from: {auto_vae}")
+                else:
+                    print("No VAE found in checkpoint. You may need to load a separate VAE file.")
         else:
             vae_sd = ldm_patched.modules.utils.load_torch_file(vae_filename_param)
             vae_filename = vae_filename_param
-        vae = VAE(sd=vae_sd)
+            vae = VAE(sd=vae_sd)
 
     if output_clip:
         w = WeightsLoader()

@@ -12,9 +12,10 @@ class ModelType(Enum):
     EPS = 1
     V_PREDICTION = 2
     V_PREDICTION_EDM = 3
+    FLOW = 6
 
 
-from ldm_patched.modules.model_sampling import EPS, V_PREDICTION, ModelSamplingDiscrete, ModelSamplingContinuousEDM
+from ldm_patched.modules.model_sampling import EPS, V_PREDICTION, ModelSamplingDiscrete, ModelSamplingContinuousEDM, CONST, ModelSamplingDiscreteFlow
 
 
 def model_sampling(model_config, model_type):
@@ -27,6 +28,9 @@ def model_sampling(model_config, model_type):
     elif model_type == ModelType.V_PREDICTION_EDM:
         c = V_PREDICTION
         s = ModelSamplingContinuousEDM
+    elif model_type == ModelType.FLOW:
+        c = CONST
+        s = ModelSamplingDiscreteFlow
 
     class ModelSampling(s, c):
         pass
@@ -34,8 +38,17 @@ def model_sampling(model_config, model_type):
     return ModelSampling(model_config)
 
 
+def convert_tensor(extra, dtype, device):
+    if hasattr(extra, "dtype"):
+        if extra.dtype != torch.int and extra.dtype != torch.long:
+            extra = ldm_patched.modules.model_management.cast_to_device(extra, device, dtype)
+        else:
+            extra = ldm_patched.modules.model_management.cast_to_device(extra, device, None)
+    return extra
+
+
 class BaseModel(torch.nn.Module):
-    def __init__(self, model_config, model_type=ModelType.EPS, device=None):
+    def __init__(self, model_config, model_type=ModelType.EPS, device=None, unet_model=UNetModel):
         super().__init__()
 
         unet_config = model_config.unet_config
@@ -48,7 +61,7 @@ class BaseModel(torch.nn.Module):
                 operations = ldm_patched.modules.ops.manual_cast
             else:
                 operations = ldm_patched.modules.ops.disable_weight_init
-            self.diffusion_model = UNetModel(**unet_config, device=device, operations=operations)
+            self.diffusion_model = unet_model(**unet_config, device=device, operations=operations)
         self.model_type = model_type
         self.model_sampling = model_sampling(model_config, model_type)
 
@@ -57,36 +70,57 @@ class BaseModel(torch.nn.Module):
             self.adm_channels = 0
         self.inpaint_model = False
         print("model_type", model_type.name)
-        print("UNet ADM Dimension", self.adm_channels)
+        print("ADM Dimension", self.adm_channels)
 
     def apply_model(self, x, t, c_concat=None, c_crossattn=None, control=None, transformer_options={}, **kwargs):
         sigma = t
         xc = self.model_sampling.calculate_input(sigma, x)
         if c_concat is not None:
-            xc = torch.cat([xc] + [c_concat], dim=1)
+            xc = torch.cat(
+                [xc] + [ldm_patched.modules.model_management.cast_to_device(c_concat, xc.device, xc.dtype)],
+                dim=1,
+            )
 
         context = c_crossattn
-        dtype = self.get_dtype()
-
-        if self.manual_cast_dtype is not None:
-            dtype = self.manual_cast_dtype
+        dtype = self.get_dtype_inference()
 
         xc = xc.to(dtype)
+        device = xc.device
         t = self.model_sampling.timestep(t).float()
-        context = context.to(dtype)
+        t = self.process_timestep(t, x=x, **kwargs)
+        if context is not None:
+            context = ldm_patched.modules.model_management.cast_to_device(context, device, dtype)
+
         extra_conds = {}
         for o in kwargs:
             extra = kwargs[o]
             if hasattr(extra, "dtype"):
-                if extra.dtype != torch.int and extra.dtype != torch.long:
-                    extra = extra.to(dtype)
+                extra = convert_tensor(extra, dtype, device)
+            elif isinstance(extra, list):
+                extra = [convert_tensor(ext, dtype, device) for ext in extra]
             extra_conds[o] = extra
 
-        model_output = self.diffusion_model(xc, t, context=context, control=control, transformer_options=transformer_options, **extra_conds).float()
+        model_output = self.diffusion_model(
+            xc,
+            t,
+            context=context,
+            control=control,
+            transformer_options=transformer_options,
+            **extra_conds,
+        ).float()
         return self.model_sampling.calculate_denoised(sigma, model_output, x)
 
     def get_dtype(self):
         return self.diffusion_model.dtype
+
+    def get_dtype_inference(self):
+        dtype = self.get_dtype()
+        if self.manual_cast_dtype is not None:
+            dtype = self.manual_cast_dtype
+        return dtype
+
+    def process_timestep(self, timestep, **kwargs):
+        return timestep
 
     def is_adm(self):
         return self.adm_channels > 0
@@ -423,3 +457,45 @@ class SD_X4Upscaler(BaseModel):
         out['c_concat'] = ldm_patched.modules.conds.CONDNoiseShape(image)
         out['y'] = ldm_patched.modules.conds.CONDRegular(noise_level)
         return out
+
+
+class Anima(BaseModel):
+    def __init__(self, model_config, model_type=ModelType.FLOW, device=None):
+        from ldm_patched.ldm.anima.model import Anima as AnimaDiT
+        super().__init__(model_config, model_type, device=device, unet_model=AnimaDiT)
+
+    def apply_model(self, x, t, c_concat=None, c_crossattn=None, control=None, transformer_options={}, **kwargs):
+        return super().apply_model(
+            x,
+            t,
+            c_concat=c_concat,
+            c_crossattn=c_crossattn,
+            control=control,
+            transformer_options=transformer_options,
+            **kwargs,
+        )
+
+    def extra_conds(self, **kwargs):
+        out = super().extra_conds(**kwargs)
+        cross_attn = kwargs.get("cross_attn", None)
+        t5xxl_ids = kwargs.get("t5xxl_ids", None)
+        t5xxl_weights = kwargs.get("t5xxl_weights", None)
+        device = kwargs["device"]
+
+        if cross_attn is not None:
+            if t5xxl_ids is not None:
+                if t5xxl_weights is not None:
+                    t5xxl_weights = t5xxl_weights.unsqueeze(0).unsqueeze(-1).to(cross_attn)
+                t5xxl_ids = t5xxl_ids.unsqueeze(0)
+                # Preprocess text embeddings via LLM adapter during inference
+                dtype = self.get_dtype_inference()
+                cross_attn = self.diffusion_model.preprocess_text_embeds(
+                    cross_attn.to(device=device, dtype=dtype),
+                    t5xxl_ids.to(device=device),
+                    t5xxl_weights=t5xxl_weights.to(device=device, dtype=dtype) if t5xxl_weights is not None else None
+                )
+            out['c_crossattn'] = ldm_patched.modules.conds.CONDRegular(cross_attn)
+        return out
+
+    def get_dtype(self):
+        return self.diffusion_model.dtype if hasattr(self.diffusion_model, 'dtype') and self.diffusion_model.dtype is not None else torch.float16

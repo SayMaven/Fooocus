@@ -662,6 +662,31 @@ def worker():
                                     base_model_name=async_task.base_model_name,
                                     loras=loras, base_model_additional_loras=base_model_additional_loras,
                                     use_synthetic_refiner=use_synthetic_refiner, vae_name=async_task.vae_name)
+
+        # Keep the UI defaults usable for Anima while steering unsafe combos back to known-good ones.
+        if pipeline.is_anima_model():
+            supported_schedulers = {
+                'euler_ancestral': 'simple',
+                'dpmpp_2m_sde_gpu': 'karras',
+            }
+            if async_task.sampler_name == 'euler':
+                print('[Anima] Upgrading sampler: euler -> euler_ancestral')
+                async_task.sampler_name = 'euler_ancestral'
+            if async_task.sampler_name not in supported_schedulers:
+                print(f'[Anima] Overriding sampler: {async_task.sampler_name} -> euler_ancestral')
+                async_task.sampler_name = 'euler_ancestral'
+            target_scheduler = supported_schedulers[async_task.sampler_name]
+            if async_task.scheduler_name != target_scheduler:
+                print(f'[Anima] Overriding scheduler: {async_task.scheduler_name} -> {target_scheduler}')
+                async_task.scheduler_name = target_scheduler
+            if async_task.cfg_scale > 5.0:
+                print(f'[Anima] Overriding CFG: {async_task.cfg_scale} -> 4.5')
+                async_task.cfg_scale = 4.5
+            if use_expansion:
+                print('[Anima] Disabling Fooocus V2 expansion.')
+                use_expansion = False
+            async_task.refiner_model_name = 'None'
+
         pipeline.set_clip_skip(async_task.clip_skip)
         if advance_progress:
             current_progress += 1

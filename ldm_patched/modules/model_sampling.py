@@ -3,16 +3,22 @@ from ldm_patched.ldm.modules.diffusionmodules.util import make_beta_schedule
 import math
 import numpy as np
 
+def reshape_sigma(sigma, noise_dim):
+    if sigma.nelement() == 1:
+        return sigma.view(())
+    return sigma.view(sigma.shape[:1] + (1,) * (noise_dim - 1))
+
 class EPS:
     def calculate_input(self, sigma, noise):
-        sigma = sigma.view(sigma.shape[:1] + (1,) * (noise.ndim - 1))
+        sigma = reshape_sigma(sigma, noise.ndim)
         return noise / (sigma ** 2 + self.sigma_data ** 2) ** 0.5
 
     def calculate_denoised(self, sigma, model_output, model_input):
-        sigma = sigma.view(sigma.shape[:1] + (1,) * (model_output.ndim - 1))
+        sigma = reshape_sigma(sigma, model_output.ndim)
         return model_input - model_output * sigma
 
     def noise_scaling(self, sigma, noise, latent_image, max_denoise=False):
+        sigma = reshape_sigma(sigma, noise.ndim)
         if max_denoise:
             noise = noise * torch.sqrt(1.0 + sigma ** 2.0)
         else:
@@ -26,12 +32,12 @@ class EPS:
 
 class V_PREDICTION(EPS):
     def calculate_denoised(self, sigma, model_output, model_input):
-        sigma = sigma.view(sigma.shape[:1] + (1,) * (model_output.ndim - 1))
+        sigma = reshape_sigma(sigma, model_output.ndim)
         return model_input * self.sigma_data ** 2 / (sigma ** 2 + self.sigma_data ** 2) - model_output * sigma * self.sigma_data / (sigma ** 2 + self.sigma_data ** 2) ** 0.5
 
 class EDM(V_PREDICTION):
     def calculate_denoised(self, sigma, model_output, model_input):
-        sigma = sigma.view(sigma.shape[:1] + (1,) * (model_output.ndim - 1))
+        sigma = reshape_sigma(sigma, model_output.ndim)
         return model_input * self.sigma_data ** 2 / (sigma ** 2 + self.sigma_data ** 2) + model_output * sigma * self.sigma_data / (sigma ** 2 + self.sigma_data ** 2) ** 0.5
 
 
@@ -207,3 +213,64 @@ class StableCascadeSampling(ModelSamplingDiscrete):
 
         percent = 1.0 - percent
         return self.sigma(torch.tensor(percent))
+
+
+class CONST:
+    def calculate_input(self, sigma, noise):
+        return noise
+
+    def calculate_denoised(self, sigma, model_output, model_input):
+        sigma = reshape_sigma(sigma, model_output.ndim)
+        return model_input - model_output * sigma
+
+    def noise_scaling(self, sigma, noise, latent_image, max_denoise=False):
+        sigma = reshape_sigma(sigma, noise.ndim)
+        return sigma * noise + (1.0 - sigma) * latent_image
+
+    def inverse_noise_scaling(self, sigma, latent):
+        sigma = reshape_sigma(sigma, latent.ndim)
+        return latent / (1.0 - sigma)
+
+
+def time_snr_shift(alpha, t):
+    if alpha == 1.0:
+        return t
+    return alpha * t / (1 + (alpha - 1) * t)
+
+class ModelSamplingDiscreteFlow(torch.nn.Module):
+    def __init__(self, model_config=None):
+        super().__init__()
+        if model_config is not None:
+            sampling_settings = model_config.sampling_settings
+        else:
+            sampling_settings = {}
+
+        self.set_parameters(shift=sampling_settings.get("shift", 1.0), multiplier=sampling_settings.get("multiplier", 1000))
+
+    def set_parameters(self, shift=1.0, timesteps=1000, multiplier=1000):
+        self.shift = shift
+        self.multiplier = multiplier
+        ts = self.sigma((torch.arange(1, timesteps + 1, 1) / timesteps) * multiplier)
+        self.register_buffer('sigmas', ts)
+        self.sigma_data = 1.0
+
+    @property
+    def sigma_min(self):
+        return self.sigmas[0]
+
+    @property
+    def sigma_max(self):
+        return self.sigmas[-1]
+
+    def timestep(self, sigma):
+        return sigma * self.multiplier
+
+    def sigma(self, timestep):
+        return time_snr_shift(self.shift, timestep / self.multiplier)
+
+    def percent_to_sigma(self, percent):
+        if percent <= 0.0:
+            return 1.0
+        if percent >= 1.0:
+            return 0.0
+        return time_snr_shift(self.shift, 1.0 - percent)

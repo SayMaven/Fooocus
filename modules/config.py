@@ -191,6 +191,7 @@ def get_dir_or_set_default(key, default_value, as_array=False, make_directory=Fa
 paths_checkpoints = get_dir_or_set_default('path_checkpoints', ['../models/checkpoints/'], True)
 paths_loras = get_dir_or_set_default('path_loras', ['../models/loras/'], True)
 path_embeddings = get_dir_or_set_default('path_embeddings', '../models/embeddings/')
+path_clip = get_dir_or_set_default('path_clip', '../models/clip/')
 path_vae_approx = get_dir_or_set_default('path_vae_approx', '../models/vae_approx/')
 path_vae = get_dir_or_set_default('path_vae', '../models/vae/')
 path_upscale_models = get_dir_or_set_default('path_upscale_models', '../models/upscale_models/')
@@ -465,6 +466,12 @@ lora_downloads = get_config_item_or_set_default(
 )
 embeddings_downloads = get_config_item_or_set_default(
     key='embeddings_downloads',
+    default_value={},
+    validator=lambda x: isinstance(x, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in x.items()),
+    expected_type=dict
+)
+clip_downloads = get_config_item_or_set_default(
+    key='clip_downloads',
     default_value={},
     validator=lambda x: isinstance(x, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in x.items()),
     expected_type=dict
@@ -745,8 +752,10 @@ possible_preset_keys = {
     "default_styles": "styles",
     "default_aspect_ratio": "resolution",
     "default_save_metadata_to_images": "default_save_metadata_to_images",
+    "default_metadata_scheme": "default_metadata_scheme",
     "checkpoint_downloads": "checkpoint_downloads",
     "embeddings_downloads": "embeddings_downloads",
+    "clip_downloads": "clip_downloads",
     "lora_downloads": "lora_downloads",
     "vae_downloads": "vae_downloads",
     "default_vae": "vae",

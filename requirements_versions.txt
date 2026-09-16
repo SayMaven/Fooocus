@@ -24,4 +24,5 @@ segment_anything>=1.0
 cupy-cuda12x>=13.4.0
 starlette>=0.37.0
 fastapi>=0.112.0
+sentencepiece>=0.2.0
 

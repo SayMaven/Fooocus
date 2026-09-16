@@ -10,9 +10,10 @@ import modules.inpaint_worker
 import extras.vae_interpose as vae_interpose
 from extras.expansion import FooocusExpansion
 
-from ldm_patched.modules.model_base import SDXL, SDXLRefiner
+from ldm_patched.modules.model_base import SDXL, SDXLRefiner, Anima as AnimaModel
 from modules.sample_hijack import clip_separate
 from modules.util import get_file_from_folder_list, get_enabled_loras
+from modules.anima_text_encoder import get_anima_text_encoder
 
 
 model_base = core.StableDiffusionModel()
@@ -43,13 +44,25 @@ def refresh_controlnets(model_paths):
     return
 
 
+def is_anima_model():
+    """Check if the current loaded model is an Anima DiT model."""
+    global final_unet
+    if final_unet is None:
+        if hasattr(model_base, 'unet_with_lora') and model_base.unet_with_lora is not None:
+            return isinstance(getattr(model_base.unet_with_lora, 'model', None), AnimaModel)
+        return False
+    if hasattr(final_unet, 'model') and isinstance(final_unet.model, AnimaModel):
+        return True
+    return False
+
+
 @torch.no_grad()
 @torch.inference_mode()
 def assert_model_integrity():
     error_message = None
 
-    if not isinstance(model_base.unet_with_lora.model, SDXL):
-        error_message = 'You have selected base model other than SDXL. This is not supported yet.'
+    if not isinstance(model_base.unet_with_lora.model, (SDXL, AnimaModel)):
+        error_message = 'You have selected base model other than SDXL or Anima. This is not supported yet.'
 
     if error_message is not None:
         raise NotImplementedError(error_message)
@@ -179,10 +192,44 @@ def clone_cond(conds):
 
 @torch.no_grad()
 @torch.inference_mode()
+def anima_clip_encode(texts):
+    """Encode texts using the Qwen3 text encoder for Anima models."""
+    encoder = get_anima_text_encoder()
+    combined_text = ' '.join(texts) if isinstance(texts, list) else str(texts)
+
+    encoded = encoder.encode(combined_text)
+    if len(encoded) == 2:
+        hidden_states, token_ids = encoded
+        token_weights = None
+    else:
+        hidden_states, token_ids, token_weights = encoded
+
+    # Return conditioning in the format expected by the pipeline:
+    # [[cross_attn_tensor, {"pooled_output": pooled, "t5xxl_ids": ids, "t5xxl_weights": weights}]]
+    pooled = torch.zeros(1, 1024)  # Anima doesn't use pooled output for ADM
+
+    # model_base.Anima.extra_conds expects t5xxl_ids and t5xxl_weights
+    t5xxl_ids = token_ids[0] if token_ids.dim() > 1 else token_ids
+    if token_weights is None:
+        t5xxl_weights = torch.ones_like(t5xxl_ids, dtype=torch.float)
+    else:
+        t5xxl_weights = token_weights[0] if token_weights.dim() > 1 else token_weights
+
+    t5xxl_ids = t5xxl_ids.to(torch.int)
+    t5xxl_weights = t5xxl_weights.to(torch.float)
+
+    return [[hidden_states, {"pooled_output": pooled, "t5xxl_ids": t5xxl_ids, "t5xxl_weights": t5xxl_weights}]]
+
+
+@torch.no_grad()
+@torch.inference_mode()
 def clip_encode(texts, pool_top_k=1):
     global final_clip
 
     if final_clip is None:
+        # For Anima models, use Qwen3 text encoder instead of CLIP
+        if is_anima_model():
+            return anima_clip_encode(texts)
         return None
     if not isinstance(texts, list):
         return None
@@ -207,7 +254,7 @@ def set_clip_skip(clip_skip: int):
     global final_clip
 
     if final_clip is None:
-        return
+        return  # Anima models don't use CLIP skip
 
     final_clip.clip_layer(-abs(clip_skip))
     return
@@ -215,7 +262,8 @@ def set_clip_skip(clip_skip: int):
 @torch.no_grad()
 @torch.inference_mode()
 def clear_all_caches():
-    final_clip.fcs_cond_cache = {}
+    if final_clip is not None:
+        final_clip.fcs_cond_cache = {}
 
 
 @torch.no_grad()
@@ -225,7 +273,12 @@ def prepare_text_encoder(async_call=True):
         # TODO: make sure that this is always called in an async way so that users cannot feel it.
         pass
     assert_model_integrity()
-    ldm_patched.modules.model_management.load_models_gpu([final_clip.patcher, final_expansion.patcher])
+    if final_clip is not None and final_expansion is not None:
+        ldm_patched.modules.model_management.load_models_gpu([final_clip.patcher, final_expansion.patcher])
+    elif final_expansion is not None:
+        ldm_patched.modules.model_management.load_models_gpu([final_expansion.patcher])
+    elif is_anima_model() and final_expansion is not None:
+        ldm_patched.modules.model_management.load_models_gpu([final_expansion.patcher])
     return
 
 
@@ -359,7 +412,16 @@ def process_diffusion(positive_cond, negative_cond, steps, switch, width, height
     print(f'[Sampler] refiner_swap_method = {refiner_swap_method}')
 
     if latent is None:
-        initial_latent = core.generate_empty_latent(width=width, height=height, batch_size=1)
+        if is_anima_model():
+            latent_format = getattr(final_unet.model, "latent_format", None)
+            latent_channels = getattr(latent_format, "latent_channels", 16)
+            latent_dimensions = getattr(latent_format, "latent_dimensions", 2)
+            if latent_dimensions == 3:
+                initial_latent = {'samples': torch.zeros([1, latent_channels, 1, height // 8, width // 8])}
+            else:
+                initial_latent = {'samples': torch.zeros([1, latent_channels, height // 8, width // 8])}
+        else:
+            initial_latent = core.generate_empty_latent(width=width, height=height, batch_size=1)
     else:
         initial_latent = latent
 

@@ -103,7 +103,7 @@ sdxl_aspect_ratios = [
     '896*1152', '896*1088', '960*1088', '960*1024', '1024*1024', '1024*960',
     '1088*960', '1088*896', '1152*896', '1152*832', '1216*832', '1280*768',
     '1344*768', '1344*704', '1408*704', '1472*704', '1536*640', '1600*640',
-    '1664*576', '1728*576'
+    '1664*576', '1728*576', '1344*1344'
 ]
 
 
@@ -130,6 +130,7 @@ class OutputFormat(Enum):
 
 class PerformanceLoRA(Enum):
     QUALITY = None
+    BALANCED = None
     SPEED = None
     EXTREME_SPEED = 'sdxl_lcm_lora.safetensors'
     LIGHTNING = 'sdxl_lightning_4step_lora.safetensors'
@@ -138,6 +139,7 @@ class PerformanceLoRA(Enum):
 
 class Steps(IntEnum):
     QUALITY = 60
+    BALANCED = 40
     SPEED = 30
     EXTREME_SPEED = 8
     LIGHTNING = 4
@@ -150,6 +152,7 @@ class Steps(IntEnum):
 
 class StepsUOV(IntEnum):
     QUALITY = 36
+    BALANCED = 24
     SPEED = 18
     EXTREME_SPEED = 8
     LIGHTNING = 4
@@ -158,6 +161,7 @@ class StepsUOV(IntEnum):
 
 class Performance(Enum):
     QUALITY = 'Quality'
+    BALANCED = 'Balanced'
     SPEED = 'Speed'
     EXTREME_SPEED = 'Extreme Speed'
     LIGHTNING = 'Lightning'
