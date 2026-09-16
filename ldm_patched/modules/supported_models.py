@@ -306,10 +306,6 @@ class SD_X4Upscaler(SD20):
         out = model_base.SD_X4Upscaler(self, device=device)
         return out
 
-models = [Stable_Zero123, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXLRefiner, SDXL, SSD1B, Segmind_Vega, SD_X4Upscaler]
-models += [SVD_img2vid]
-
-
 class Anima(supported_models_base.BASE):
     unet_config = {
         "image_model": "anima",
@@ -347,4 +343,5 @@ class Anima(supported_models_base.BASE):
         return state_dict
 
 
-models += [Anima]
+models = [Anima, Stable_Zero123, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXLRefiner, SDXL, SSD1B, Segmind_Vega, SD_X4Upscaler]
+models += [SVD_img2vid]

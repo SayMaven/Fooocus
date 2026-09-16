@@ -103,6 +103,22 @@ class TestAnimaPreset(unittest.TestCase):
         for lora in expected_loras:
             self.assertIn(lora, preset.get('lora_downloads', {}))
 
+    def test_supported_models_base_matches_handles_missing_keys(self):
+        class DummyBase:
+            unet_config = {
+                "context_dim": 768,
+                "model_channels": 320,
+            }
+            @classmethod
+            def matches(s, unet_config):
+                for k in s.unet_config:
+                    if k not in unet_config or s.unet_config[k] != unet_config[k]:
+                        return False
+                return True
+
+        dit_config = {"image_model": "anima", "model_channels": 2048}
+        self.assertFalse(DummyBase.matches(dit_config))
+
 
 if __name__ == '__main__':
     unittest.main()
