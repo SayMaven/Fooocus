@@ -274,6 +274,17 @@ def _register_aimdo_in_memory():
         m.torch = ct
         sys.modules["comfy_aimdo.torch"] = ct
 
+    if "comfy_kitchen" not in sys.modules:
+        class _ComfyKitchenStub(types.ModuleType):
+            def __getattr__(self, name):
+                if "available" in name or "supports" in name:
+                    return lambda *a, **k: False
+                return lambda *a, **k: None
+
+        ck = _ComfyKitchenStub("comfy_kitchen")
+        ck.int8_attention_is_available = lambda: False
+        sys.modules["comfy_kitchen"] = ck
+
 
 _register_aimdo_in_memory()
 
