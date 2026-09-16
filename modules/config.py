@@ -482,6 +482,12 @@ vae_downloads = get_config_item_or_set_default(
     validator=lambda x: isinstance(x, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in x.items()),
     expected_type=dict
 )
+upscale_downloads = get_config_item_or_set_default(
+    key='upscale_downloads',
+    default_value=get_config_item_or_set_default(key='upscale_download', default_value={}, validator=lambda x: isinstance(x, dict), expected_type=dict),
+    validator=lambda x: isinstance(x, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in x.items()),
+    expected_type=dict
+)
 available_aspect_ratios = get_config_item_or_set_default(
     key='available_aspect_ratios',
     default_value=modules.flags.sdxl_aspect_ratios,
@@ -770,6 +776,9 @@ possible_preset_keys = {
     "clip_downloads": "clip_downloads",
     "lora_downloads": "lora_downloads",
     "vae_downloads": "vae_downloads",
+    "upscale_downloads": "upscale_downloads",
+    "upscale_download": "upscale_downloads",
+    "default_upscale_model": "default_upscale_model",
     "default_vae": "vae",
     # "default_inpaint_method": "inpaint_method", # disabled so inpaint mode doesn't refresh after every preset change
     "default_inpaint_engine_version": "inpaint_engine_version",

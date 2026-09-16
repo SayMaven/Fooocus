@@ -210,9 +210,19 @@ with shared.gradio_root:
                             with gr.Column():
                                 uov_input_image = grh.Image(label='Image', source='upload', type='numpy', show_label=False)
                             with gr.Column():
+                                def match_upscale_choice(choice, choices):
+                                    if choice in choices:
+                                        return choice
+                                    if choice and choice not in ['Default (Fooocus)', 'Default', 'default', 'fooocus_upscaler']:
+                                        base = os.path.splitext(str(choice).strip())[0]
+                                        for c in choices:
+                                            if c == choice or c.startswith(base) or base in c:
+                                                return c
+                                    return 'Default (Fooocus)'
+
                                 uov_method = gr.Radio(label='Upscale or Variation:', choices=flags.uov_list, value=modules.config.default_uov_method)
                                 uov_upscale_choices = ['Default (Fooocus)'] + modules.config.upscale_filenames
-                                uov_upscale_value = modules.config.default_upscale_model_name if modules.config.default_upscale_model_name in uov_upscale_choices else 'Default (Fooocus)'
+                                uov_upscale_value = match_upscale_choice(modules.config.default_upscale_model_name, uov_upscale_choices)
                                 uov_upscale_model = gr.Dropdown(label='Upscaler', choices=uov_upscale_choices, value=uov_upscale_value, show_label=True)
                                 gr.HTML('<a href="https://github.com/lllyasviel/Fooocus/discussions/390" target="_blank">\U0001F4D4 Documentation</a>')
                     with gr.Tab(label='Image Prompt', id='ip_tab') as ip_tab:
@@ -391,7 +401,7 @@ with shared.gradio_root:
                                 enhance_uov_method = gr.Radio(label='Upscale or Variation:', choices=flags.uov_list,
                                                               value=modules.config.default_enhance_uov_method)
                                 enhance_uov_upscale_choices = ['Default (Fooocus)'] + modules.config.upscale_filenames
-                                enhance_uov_upscale_value = modules.config.default_enhance_uov_upscale_model if modules.config.default_enhance_uov_upscale_model in enhance_uov_upscale_choices else 'Default (Fooocus)'
+                                enhance_uov_upscale_value = match_upscale_choice(modules.config.default_enhance_uov_upscale_model, enhance_uov_upscale_choices)
                                 enhance_uov_upscale_model = gr.Dropdown(label='Upscaler', choices=enhance_uov_upscale_choices,
                                                                         value=enhance_uov_upscale_value, show_label=True)
                                 enhance_uov_processing_order = gr.Radio(label='Order of Processing',
@@ -933,10 +943,11 @@ with shared.gradio_root:
                 clip_downloads = preset_prepared.get('clip_downloads', {})
                 lora_downloads = preset_prepared.get('lora_downloads', {})
                 vae_downloads = preset_prepared.get('vae_downloads', {})
+                upscale_downloads = preset_prepared.get('upscale_downloads', {})
 
                 preset_prepared['base_model'], preset_prepared['checkpoint_downloads'] = launch.download_models(
                     default_model, previous_default_models, checkpoint_downloads, embeddings_downloads, clip_downloads,
-                    lora_downloads, vae_downloads)
+                    lora_downloads, vae_downloads, upscale_downloads)
 
                 if 'prompt' in preset_prepared and preset_prepared.get('prompt') == '':
                     del preset_prepared['prompt']

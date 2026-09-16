@@ -14,26 +14,37 @@ model = None
 loaded_model_filename = None
 
 
+def _resolve_upscale_path(model_str):
+    if not model_str or model_str in ['Default (Fooocus)', 'Default', 'default', 'fooocus_upscaler', 'None', '']:
+        return None
+    if os.path.exists(model_str):
+        return model_str
+    custom_path = os.path.join(path_upscale_models, model_str)
+    if os.path.exists(custom_path):
+        return custom_path
+    for ext in ['', '.safetensors', '.pt', '.pth']:
+        if os.path.exists(custom_path + ext):
+            return custom_path + ext
+    base_name = os.path.splitext(model_str)[0]
+    if os.path.exists(path_upscale_models):
+        for f in os.listdir(path_upscale_models):
+            if (f.startswith(base_name) or base_name in f) and f.endswith(('.pth', '.safetensors', '.bin', '.pt')):
+                return os.path.join(path_upscale_models, f)
+    return None
+
+
 def get_upscale_model_filename(model_name=None):
     if model_name:
-        model_str = str(model_name).strip()
-        if model_str not in ['Default (Fooocus)', 'Default', 'default', 'fooocus_upscaler', 'None', '']:
-            if os.path.exists(model_str):
-                return model_str
-            custom_path = os.path.join(path_upscale_models, model_str)
-            if os.path.exists(custom_path):
-                return custom_path
+        resolved = _resolve_upscale_path(str(model_name).strip())
+        if resolved:
+            return resolved
 
     import modules.config as config
     config_default = getattr(config, 'default_upscale_model', None)
     if config_default:
-        config_str = str(config_default).strip()
-        if config_str not in ['Default (Fooocus)', 'Default', 'default', 'fooocus_upscaler', 'None', '']:
-            if os.path.exists(config_str):
-                return config_str
-            custom_path = os.path.join(path_upscale_models, config_str)
-            if os.path.exists(custom_path):
-                return custom_path
+        resolved = _resolve_upscale_path(str(config_default).strip())
+        if resolved:
+            return resolved
 
     default_path = os.path.join(path_upscale_models, 'fooocus_upscaler_s409985e5.bin')
     if os.path.exists(default_path):

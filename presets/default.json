@@ -37,6 +37,7 @@
     "default_prompt": "Smooth_Quality, masterpiece,best quality,amazing quality, lazypos, (cel shading:1.2), soft ambient lighting, no visible light source, even illumination, soft shadows, anime lighting, bright colors, natural color grading, ",
     "default_prompt_negative": "bad quality,worst quality,worst detail,sketch,censor,Smooth_Negative, Smooth_Negative-neg, lazyneg, lazyhand,",
     "default_styles": [],
+    "default_upscale_model": "RealESRGAN_x4Plus_Anime_6B.pt",
     "default_aspect_ratio": "1152*896",
     "default_overwrite_step": 30,
     "checkpoint_downloads": {
@@ -55,6 +56,10 @@
         "DynamicPosesSlider.safetensors": "https://civitai.com/api/download/models/1607510?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6",
         "Sarturasi.safetensors": "https://civitai.com/api/download/models/1227749?fileId=1133148&token=6d5979eca3c585f9a91dcd83ded3f3a6",
         "ColorTemp.safetensors": "https://civitai.com/api/download/models/1227713?fileId=1133115&token=6d5979eca3c585f9a91dcd83ded3f3a6"
+    },
+    "upscale_downloads": {
+        "Remacri.safetensors": "https://civitai.com/api/download/models/164821?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "RealESRGAN_x4Plus_Anime_6B.pt": "https://civitai.com/api/download/models/164904?fileId=124735&token=6d5979eca3c585f9a91dcd83ded3f3a6"
     },
     "previous_default_models": []
 }

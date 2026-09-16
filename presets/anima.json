@@ -51,6 +51,7 @@
     "default_save_metadata_to_images": true,
     "default_scheduler": "simple",
     "default_styles": [],
+    "default_upscale_model": "RealESRGAN_x4Plus_Anime_6B.pt",
     "default_vae": "qwen_image_vae.safetensors",
     "embeddings_downloads": {},
     "lora_downloads": {
@@ -65,6 +66,10 @@
         "Ob_animaV3aesthetic.safetensors",
         "Ob_animaV2.0.safetensors"
     ],
+    "upscale_downloads": {
+        "Remacri.safetensors": "https://civitai.com/api/download/models/164821?type=Model&format=SafeTensor&token=6d5979eca3c585f9a91dcd83ded3f3a6",
+        "RealESRGAN_x4Plus_Anime_6B.pt": "https://civitai.com/api/download/models/164904?fileId=124735&token=6d5979eca3c585f9a91dcd83ded3f3a6"
+    },
     "vae_downloads": {
         "qwen_image_vae.safetensors": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors"
     }
