@@ -49,6 +49,9 @@ class StableDiffusionModel:
         self.unet_with_lora = unet
         self.clip_with_lora = clip
         self.visited_loras = ''
+        self.loras_to_load = []
+        if self.unet_with_lora is not None:
+            self.unet_with_lora.loras_to_load = []
 
         self.lora_key_map_unet = {}
         self.lora_key_map_clip = {}
@@ -96,6 +99,8 @@ class StableDiffusionModel:
         self.unet_with_lora = self.unet.clone() if self.unet is not None else None
         if self.unet_with_lora is not None:
             self.unet_with_lora.model_file = self.filename
+            self.unet_with_lora.loras_to_load = list(loras_to_load)
+        self.loras_to_load = list(loras_to_load)
         self.clip_with_lora = self.clip.clone() if self.clip is not None else None
 
         for lora_filename, weight in loras_to_load:
@@ -504,6 +509,24 @@ def _load_anima_reference_modules():
     return comfy.sample, comfy.sd
 
 
+_anima_lora_cache = {}
+
+
+def _get_anima_lora_dict(lora_path, comfy_utils):
+    if not os.path.exists(lora_path):
+        return None
+    try:
+        mtime = os.path.getmtime(lora_path)
+    except Exception:
+        mtime = 0
+    cached = _anima_lora_cache.get(lora_path)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    lora_dict = comfy_utils.load_torch_file(lora_path, safe_load=True)
+    _anima_lora_cache[lora_path] = (mtime, lora_dict)
+    return lora_dict
+
+
 def _get_anima_reference_model(model):
     ckpt_filename = getattr(model, "model_file", None)
     if not ckpt_filename and hasattr(model, "filename"):
@@ -533,9 +556,32 @@ def _get_anima_reference_model(model):
         _anima_reference_sampler_cache[ckpt_filename] = cached
 
     out_model = cached.clone()
-    patches = getattr(model, "patches", None)
-    if patches:
-        out_model.patches = {k: list(v) for k, v in patches.items()}
+
+    loras_to_load = getattr(model, "loras_to_load", None)
+    if loras_to_load is None:
+        try:
+            import modules.default_pipeline as _dp
+            loras_to_load = getattr(getattr(_dp.model_base, "unet_with_lora", None), "loras_to_load", None)
+            if loras_to_load is None:
+                loras_to_load = getattr(_dp.model_base, "loras_to_load", None)
+        except Exception:
+            pass
+
+    if loras_to_load:
+        import comfy.utils
+        for lora_path, weight in loras_to_load:
+            if not weight:
+                continue
+            try:
+                lora_dict = _get_anima_lora_dict(lora_path, comfy.utils)
+                if lora_dict is not None:
+                    patched_model, _ = comfy_sd.load_lora_for_models(out_model, None, lora_dict, weight, 0)
+                    if patched_model is not None:
+                        out_model = patched_model
+                        print(f"[AnimaSampler] Applied LoRA to Comfy reference: {os.path.basename(lora_path)} (weight={weight})")
+            except Exception as e:
+                print(f"[AnimaSampler] Failed to apply LoRA {lora_path}: {e}")
+
     return out_model
 
 
@@ -722,27 +768,33 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
                 comfy_root = _get_anima_reference_comfy_root()
                 print(f"[AnimaSampler] Using Comfy reference sampler from {comfy_root}")
                 _anima_reference_sampler_announced.add(model_file)
-            samples = comfy_sample.sample(
-                model=reference_model,
-                noise=noise,
-                steps=steps,
-                cfg=cfg,
-                sampler_name=sampler_name,
-                scheduler=scheduler,
-                positive=positive,
-                negative=negative,
-                latent_image=latent_image,
-                denoise=denoise,
-                disable_noise=disable_noise,
-                start_step=start_step,
-                last_step=last_step,
-                force_full_denoise=force_full_denoise,
-                noise_mask=noise_mask,
-                sigmas=sigmas,
-                callback=callback,
-                disable_pbar=disable_pbar,
-                seed=seed,
-            )
+            try:
+                samples = comfy_sample.sample(
+                    model=reference_model,
+                    noise=noise,
+                    steps=steps,
+                    cfg=cfg,
+                    sampler_name=sampler_name,
+                    scheduler=scheduler,
+                    positive=positive,
+                    negative=negative,
+                    latent_image=latent_image,
+                    denoise=denoise,
+                    disable_noise=disable_noise,
+                    start_step=start_step,
+                    last_step=last_step,
+                    force_full_denoise=force_full_denoise,
+                    noise_mask=noise_mask,
+                    sigmas=sigmas,
+                    callback=callback,
+                    disable_pbar=disable_pbar,
+                    seed=seed,
+                )
+            finally:
+                try:
+                    reference_model.unpatch_model()
+                except Exception:
+                    pass
             out = latent.copy()
             out["samples"] = samples
             return out
