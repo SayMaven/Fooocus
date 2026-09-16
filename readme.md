@@ -25,6 +25,10 @@ This repository is an active fork extending Fooocus with **Dual-Architecture Sup
   - **Zero CPU Offloading**: Eliminates DiT RAM offloading, completely avoiding Linux OOM Killer terminations.
 - **Zero-VRAM Live Step Preview for Anima**:
   - Instant live preview during DiT sampling steps using CPU-based linear Wan21 RGB latent projection.
+- **Custom Upscaler Dropdown & Robust Model Loader**:
+  - WebUI dropdown selector in the *Upscale or Variation* and *Enhance* tabs supporting any custom super-resolution model (`RealESRGAN_x4Plus_Anime_6B`, `4x-UltraSharp`, `Remacri`, etc.) placed in `models/upscale_models/`.
+  - Smart download prevention: Eliminates redundant Hugging Face downloads when custom models are chosen.
+  - Magic-byte verification in model loader to automatically detect PyTorch `.pt`/`.pth` archives even if mistakenly named `.safetensors`.
 - **Fast Startup & Colab Auto-Bypass**:
   - Pre-built binary wheel integration for `numpy-1.26.4` on Python 3.13, skipping 7-minute Meson/Ninja compilations.
   - CLI flag `--skip-pip` (or `SKIP_PIP=1`) to skip package dependency loops on warm runtimes.
@@ -342,6 +346,23 @@ set CIVITAI_API_TOKEN=your_civitai_token_here
 > 2. Go to **Account Settings** -> **API Keys**.
 > 3. Click **Add API Key**, give it a name, and copy your token.
 
+## 🔍 Custom Upscalers & Super-Resolution Models
+
+Fooocus allows you to use custom super-resolution models (such as `RealESRGAN_x4Plus_Anime_6B`, `4x-UltraSharp`, `Remacri`, `DAT`, etc.) alongside the default Fooocus upscaler.
+
+### How to Use:
+1. Place your upscaler models into the `models/upscale_models/` directory (supports `.pth`, `.pt`, `.safetensors`, and `.bin`).
+2. Open the WebUI and navigate to **Input Image** -> **Upscale or Variation** (or the **Enhance** tab).
+3. Select your desired model from the **Upscaler** dropdown:
+   - **`Default (Fooocus)`**: Uses Fooocus's built-in upscaler model (`fooocus_upscaler_s409985e5.bin`).
+   - **Custom Models**: Any models detected in `models/upscale_models/` appear directly in the list (e.g. `RealESRGAN_x4Plus_Anime_6B.pt`).
+4. If you add new models while Fooocus is running, simply click **`🔄 Refresh All Files`** in the Model tab to update the list without restarting.
+
+### Key Advantages:
+- **Smart Download Prevention**: When you select a custom upscaler, Fooocus will never download the default 32 MB model from Hugging Face. If `Default (Fooocus)` is chosen, it only downloads once if the file is missing locally.
+- **Multi-Scale Compatibility**: Even if a custom model has a fixed scale (e.g., 4x), Fooocus automatically upscales and precisely resamples the image to your requested scaling target (`Upscale (Fast 2x)`, `Upscale (1.5x)`, or `Upscale (2x)`), followed by the high-resolution diffusion refinement pass.
+- **Magic Header Detection**: If a PyTorch `.pt` or `.pth` model was saved with a `.safetensors` extension, Fooocus automatically inspects the first 8 magic bytes and safely routes it to `torch.load` to avoid `SafetensorError: header too large` crashes.
+
 ## UI Access and Authentication
 In addition to running on localhost, Fooocus can also expose its UI in two ways: 
 * Local UI listener: use `--listen` (specify port e.g. with `--port 8888`). 
@@ -386,6 +407,7 @@ For example, an edited `Fooocus\config.txt` (this file will be generated after t
     "path_outputs": "D:\\Fooocus\\outputs",
     "default_model": "realisticStockPhoto_v10.safetensors",
     "default_refiner": "",
+    "default_upscale_model": "Default (Fooocus)",
     "default_loras": [["lora_filename_1.safetensors", 0.5], ["lora_filename_2.safetensors", 0.5]],
     "default_cfg_scale": 3.0,
     "default_sampler": "dpmpp_2m",
