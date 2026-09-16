@@ -97,8 +97,6 @@ Below is a test on a relatively low-end laptop with **16GB System RAM** and **6G
 
 ![image](https://github.com/lllyasviel/Fooocus/assets/19834515/938737a5-b105-4f19-b051-81356cb7c495)
 
-Besides, recently many other software report that Nvidia driver above 532 is sometimes 10x slower than Nvidia driver 531. If your generation time is very long, consider download [Nvidia Driver 531 Laptop](https://www.nvidia.com/download/driverResults.aspx/199991/en-us/) or [Nvidia Driver 531 Desktop](https://www.nvidia.com/download/driverResults.aspx/199990/en-us/).
-
 Note that the minimal requirement is **4GB Nvidia GPU memory (4GB VRAM)** and **8GB system memory (8GB RAM)**. This requires using Microsoft’s Virtual Swap technique, which is automatically enabled by your Windows installation in most cases, so you often do not need to do anything about it. However, if you are not sure, or if you manually turned it off (would anyone really do that?), or **if you see any "RuntimeError: CPUAllocator"**, you can enable it here:
 
 <details>
@@ -143,65 +141,65 @@ This fork is actively maintained on branch `anima-support` (Dual-Architecture: S
 
 ### Linux (Using Anaconda)
 
-If you want to use Anaconda/Miniconda, you can
+If you want to use Anaconda/Miniconda, you can:
 
-    git clone https://github.com/lllyasviel/Fooocus.git
+    git clone -b anima-support https://github.com/SayMaven/Fooocus.git
     cd Fooocus
     conda env create -f environment.yaml
     conda activate fooocus
     pip install -r requirements_versions.txt
 
-Then download the models: download [default models](#models) to the folder "Fooocus\models\checkpoints". **Or let Fooocus automatically download the models** using the launcher:
+Then download the models into `Fooocus/models/checkpoints`, or **let Fooocus automatically download the models** using the launcher:
 
     conda activate fooocus
     python entry_with_update.py
 
-Or, if you want to open a remote port, use
+Or, if you want to open a remote port, use:
 
     conda activate fooocus
     python entry_with_update.py --listen
 
-Use `python entry_with_update.py --preset anime` or `python entry_with_update.py --preset realistic` for Fooocus Anime/Realistic Edition.
+Use `python entry_with_update.py --preset anima` for Fooocus Anima (DiT) Edition, or `--preset anime` / `--preset realistic`.
 
 ### Linux (Using Python Venv)
 
-Your Linux needs to have **Python 3.10** installed, and let's say your Python can be called with the command **python3** with your venv system working; you can
+Using Python venv:
 
-    git clone https://github.com/lllyasviel/Fooocus.git
+    git clone -b anima-support https://github.com/SayMaven/Fooocus.git
     cd Fooocus
     python3 -m venv fooocus_env
     source fooocus_env/bin/activate
     pip install -r requirements_versions.txt
 
-See the above sections for model downloads. You can launch the software with:
+Launch the software with:
 
     source fooocus_env/bin/activate
     python entry_with_update.py
 
-Or, if you want to open a remote port, use
+Or, if you want to open a remote port, use:
 
     source fooocus_env/bin/activate
     python entry_with_update.py --listen
 
-Use `python entry_with_update.py --preset anime` or `python entry_with_update.py --preset realistic` for Fooocus Anime/Realistic Edition.
+Use `python entry_with_update.py --preset anima` for Fooocus Anima (DiT) Edition, or `--preset anime` / `--preset realistic`.
 
 ### Linux (Using native system Python)
 
-If you know what you are doing, and your Linux already has **Python 3.10** installed, and your Python can be called with the command **python3** (and Pip with **pip3**), you can
+If you have Python (and Pip) installed on your system:
 
-    git clone https://github.com/lllyasviel/Fooocus.git
+    git clone -b anima-support https://github.com/SayMaven/Fooocus.git
     cd Fooocus
     pip3 install -r requirements_versions.txt
 
-See the above sections for model downloads. You can launch the software with:
+Launch the software with:
 
     python3 entry_with_update.py
 
-Or, if you want to open a remote port, use
+Or, if you want to open a remote port, use:
 
     python3 entry_with_update.py --listen
 
-Use `python entry_with_update.py --preset anime` or `python entry_with_update.py --preset realistic` for Fooocus Anime/Realistic Edition.
+Use `python entry_with_update.py --preset anima` for Fooocus Anima (DiT) Edition, or `--preset anime` / `--preset realistic`.
 
 ### Linux (AMD GPUs)
 
@@ -242,7 +240,7 @@ Mac is not intensively tested. Below is an unofficial guideline for using Mac. Y
 You can install Fooocus on Apple Mac silicon (M1 or M2) with macOS 'Catalina' or a newer version. Fooocus runs on Apple silicon computers via [PyTorch](https://pytorch.org/get-started/locally/) MPS device acceleration. Mac Silicon computers don't come with a dedicated graphics card, resulting in significantly longer image processing times compared to computers with dedicated graphics cards.
 
 1. Install the conda package manager and pytorch nightly. Read the [Accelerated PyTorch training on Mac](https://developer.apple.com/metal/pytorch/) Apple Developer guide for instructions. Make sure pytorch recognizes your MPS device.
-1. Open the macOS Terminal app and clone this repository with `git clone https://github.com/lllyasviel/Fooocus.git`.
+1. Open the macOS Terminal app and clone this repository with `git clone -b anima-support https://github.com/SayMaven/Fooocus.git`.
 1. Change to the new Fooocus directory, `cd Fooocus`.
 1. Create a new conda environment, `conda env create -f environment.yaml`.
 1. Activate your new conda environment, `conda activate fooocus`.
@@ -302,6 +300,48 @@ Given different goals, the default models and configs of Fooocus are different:
 
 Note that the download is **automatic** - you do not need to do anything if the internet connection is okay. However, you can download them manually if you (or move them from somewhere else) have your own preparation.
 
+## 🔑 Civitai API Token Authentication
+
+Many checkpoints and LoRAs on Civitai (such as early-access, age-gated, or restricted models) require account authentication. Without a token, downloading them directly will trigger an `HTTP 401 Unauthorized` error.
+
+Fooocus supports **automated Civitai token authentication** via the `CIVITAI_API_TOKEN` (or `CIVITAI_TOKEN`) environment variable or a local `.env` file. When configured, Fooocus automatically appends your token to any `civitai.com` or `civitai.red` download request.
+
+### How to configure:
+
+#### 1. Via `.env` File (Recommended for Local Windows / Linux)
+Create a `.env` file in the Fooocus root directory (already included in `.gitignore` to protect your privacy):
+```ini
+CIVITAI_API_TOKEN=your_civitai_token_here
+```
+
+#### 2. Via Google Colab Notebook
+Set the environment variable in a notebook cell before launching Fooocus:
+```python
+%env CIVITAI_API_TOKEN=your_civitai_token_here
+```
+*(Or use Colab's built-in **Secrets** 🔑 feature in the left sidebar).*
+
+#### 3. Via Windows Batch Script (`run.bat`)
+Add this line before the python launch command:
+```cmd
+set CIVITAI_API_TOKEN=your_civitai_token_here
+```
+
+#### 4. Via Terminal (PowerShell / Bash)
+- **PowerShell (Windows):**
+  ```powershell
+  $env:CIVITAI_API_TOKEN = "your_civitai_token_here"
+  ```
+- **Bash (Linux/macOS):**
+  ```bash
+  export CIVITAI_API_TOKEN="your_civitai_token_here"
+  ```
+
+> **Where to get your Civitai API Token:**
+> 1. Log in to [Civitai.com](https://civitai.com).
+> 2. Go to **Account Settings** -> **API Keys**.
+> 3. Click **Add API Key**, give it a name, and copy your token.
+
 ## UI Access and Authentication
 In addition to running on localhost, Fooocus can also expose its UI in two ways: 
 * Local UI listener: use `--listen` (specify port e.g. with `--port 8888`). 
@@ -309,26 +349,21 @@ In addition to running on localhost, Fooocus can also expose its UI in two ways:
 
 In both ways the access is unauthenticated by default. You can add basic authentication by creating a file called `auth.json` in the main directory, which contains a list of JSON objects with the keys `user` and `pass` (see example in [auth-example.json](./auth-example.json)).
 
-## List of "Hidden" Tricks
+## List of Architecture Optimizations
 <a name="tech_list"></a>
 
 <details>
-<summary>Click to see a list of tricks. Those are based on SDXL and are not very up-to-date with latest models.</summary>
+<summary>Click to view built-in sampling and pipeline optimizations.</summary>
 
-1. GPT2-based [prompt expansion as a dynamic style "Fooocus V2".](https://github.com/lllyasviel/Fooocus/discussions/117#raw) (similar to Midjourney's hidden pre-processing and "raw" mode, or the LeonardoAI's Prompt Magic).
-2. Native refiner swap inside one single k-sampler. The advantage is that the refiner model can now reuse the base model's momentum (or ODE's history parameters) collected from k-sampling to achieve more coherent sampling. In Automatic1111's high-res fix and ComfyUI's node system, the base model and refiner use two independent k-samplers, which means the momentum is largely wasted, and the sampling continuity is broken. Fooocus uses its own advanced k-diffusion sampling that ensures seamless, native, and continuous swap in a refiner setup. (Update Aug 13: Actually, I discussed this with Automatic1111 several days ago, and it seems that the “native refiner swap inside one single k-sampler” is [merged]( https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/12371) into the dev branch of webui. Great!)
-3. Negative ADM guidance. Because the highest resolution level of XL Base does not have cross attentions, the positive and negative signals for XL's highest resolution level cannot receive enough contrasts during the CFG sampling, causing the results to look a bit plastic or overly smooth in certain cases. Fortunately, since the XL's highest resolution level is still conditioned on image aspect ratios (ADM), we can modify the adm on the positive/negative side to compensate for the lack of CFG contrast in the highest resolution level. (Update Aug 16, the IOS App [Draw Things](https://apps.apple.com/us/app/draw-things-ai-generation/id6444050820) will support Negative ADM Guidance. Great!)
-4. We implemented a carefully tuned variation of Section 5.1 of ["Improving Sample Quality of Diffusion Models Using Self-Attention Guidance"](https://arxiv.org/pdf/2210.00939.pdf). The weight is set to very low, but this is Fooocus's final guarantee to make sure that the XL will never yield an overly smooth or plastic appearance (examples [here](https://github.com/lllyasviel/Fooocus/discussions/117#sharpness)). This can almost eliminate all cases for which XL still occasionally produces overly smooth results, even with negative ADM guidance. (Update 2023 Aug 18, the Gaussian kernel of SAG is changed to an anisotropic kernel for better structure preservation and fewer artifacts.)
-5. We modified the style templates a bit and added the "cinematic-default".
-6. We tested the "sd_xl_offset_example-lora_1.0.safetensors" and it seems that when the lora weight is below 0.5, the results are always better than XL without lora.
-7. The parameters of samplers are carefully tuned.
-8. Because XL uses positional encoding for generation resolution, images generated by several fixed resolutions look a bit better than those from arbitrary resolutions (because the positional encoding is not very good at handling int numbers that are unseen during training). This suggests that the resolutions in UI may be hard coded for best results.
-9. Separated prompts for two different text encoders seem unnecessary. Separated prompts for the base model and refiner may work, but the effects are random, and we refrain from implementing this.
-10. The DPM family seems well-suited for XL since XL sometimes generates overly smooth texture, but the DPM family sometimes generates overly dense detail in texture. Their joint effect looks neutral and appealing to human perception.
-11. A carefully designed system for balancing multiple styles as well as prompt expansion.
-12. Using automatic1111's method to normalize prompt emphasizing. This significantly improves results when users directly copy prompts from civitai.
-13. The joint swap system of the refiner now also supports img2img and upscale in a seamless way.
-14. CFG Scale and TSNR correction (tuned for SDXL) when CFG is bigger than 10.
+1. **Prompt Expansion**: Offline GPT-2 dynamic prompt enhancement engine ("Fooocus V2").
+2. **Native Refiner Swap**: Seamless momentum-preserving model swap inside a single k-sampler for SDXL.
+3. **Negative ADM Guidance**: Compensates for lack of cross-attention contrast in SDXL highest resolution level.
+4. **Self-Attention Guidance (SAG)**: Anisotropic kernel variation of SAG for artifact prevention and structural preservation.
+5. **Style Normalization**: Balanced multi-style blending and automatic A1111-compatible prompt emphasizing.
+6. **Rectified Flow Matching**: Shifted Euler Ancestral scheduling tuned for DiT (Anima) models.
+7. **Dual-Path VAE Decode**: Specialized handling for both 4-channel 2D KL-Autoencoder and 16-channel 3D Causal WanVAE.
+8. **Sequential CFG Batching**: Sequential positive/unconditioned passes preventing high-resolution activation spikes.
+9. **Zero-VRAM Step Preview**: Instant linear RGB latent projection preview for DiT latents.
 </details>
 
 ## Customization
@@ -370,8 +405,6 @@ Many other keys, formats, and examples are in `Fooocus\config_modification_tutor
 Consider twice before you really change the config. If you find yourself breaking things, just delete `Fooocus\config.txt`. Fooocus will go back to default.
 
 A safer way is just to try "run_anime.bat" or "run_realistic.bat" - they should already be good enough for different tasks.
-
-~Note that `user_path_config.txt` is deprecated and will be removed soon.~ (Edit: it is already removed.)
 
 ### All CMD Flags
 
