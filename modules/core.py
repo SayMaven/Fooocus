@@ -759,13 +759,54 @@ def get_previewer(model):
 
     from modules.config import path_vae_approx
 
-    # Skip preview for models with non-4-channel latents (e.g., Anima with 16ch)
-    if hasattr(model, 'model') and hasattr(model.model, 'latent_format'):
-        latent_channels = getattr(model.model.latent_format, 'latent_channels', 4)
-        if latent_channels != 4:
-            return None
+    latent_format = getattr(getattr(model, 'model', None), 'latent_format', None)
+    if latent_format is None:
+        try:
+            import modules.default_pipeline as _dp
+            latent_format = getattr(getattr(_dp.model_base, 'unet', None), 'latent_format', None)
+        except Exception:
+            pass
 
-    is_sdxl = isinstance(model.model.latent_format, ldm_patched.modules.latent_formats.SDXL)
+    latent_channels = getattr(latent_format, 'latent_channels', 4)
+
+    # For models with non-4-channel latents (e.g., Anima with 16ch Wan21 latents),
+    # use direct linear RGB projection via latent_rgb_factors for zero-VRAM live preview.
+    if latent_channels != 4:
+        rgb_factors = getattr(latent_format, 'latent_rgb_factors', None)
+        rgb_bias = getattr(latent_format, 'latent_rgb_factors_bias', None)
+        if rgb_factors is None:
+            try:
+                from ldm_patched.modules.latent_formats import Wan21
+                w = Wan21()
+                rgb_factors = w.latent_rgb_factors
+                rgb_bias = w.latent_rgb_factors_bias
+            except Exception:
+                pass
+
+        if rgb_factors is not None:
+            factors_np = np.array(rgb_factors, dtype=np.float32)
+            bias_np = np.array(rgb_bias, dtype=np.float32) if rgb_bias is not None else None
+
+            @torch.no_grad()
+            @torch.inference_mode()
+            def anima_preview_function(x0, step, total_steps):
+                with torch.no_grad():
+                    if x0 is None:
+                        return None
+                    if hasattr(x0, "ndim") and x0.ndim == 5:
+                        x0 = x0[:, :, 0, :, :]
+                    latent = x0[0].detach().float().cpu().numpy()
+                    latent_hwc = np.transpose(latent, (1, 2, 0))
+                    rgb = np.matmul(latent_hwc, factors_np)
+                    if bias_np is not None:
+                        rgb = rgb + bias_np
+                    rgb_scaled = np.clip(((rgb + 1.0) / 2.0) * 255.0, 0, 255).astype(np.uint8)
+                    return np.repeat(np.repeat(rgb_scaled, 2, axis=0), 2, axis=1)
+
+            return anima_preview_function
+        return None
+
+    is_sdxl = isinstance(getattr(model, 'model', None) and model.model.latent_format, ldm_patched.modules.latent_formats.SDXL)
     vae_approx_filename = os.path.join(path_vae_approx, 'xlvaeapp.pth' if is_sdxl else 'vaeapp_sd15.pth')
 
     if vae_approx_filename in VAE_approx_models:
