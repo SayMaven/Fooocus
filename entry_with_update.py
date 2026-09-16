@@ -21,7 +21,15 @@ try:
             print(f"[Update] Git CLI: {pull_res.stdout.strip()}")
             updated = True
         else:
-            print(f"[Update] Git CLI update failed or local changes detected: {pull_res.stderr.strip()}")
+            err_msg = f"{pull_res.stderr.strip()} {pull_res.stdout.strip()}".strip()
+            print(f"[Update] Git CLI update failed: {err_msg}")
+            if os.path.isdir("/content"):
+                branch_res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout=subprocess.PIPE, text=True, check=False)
+                curr_branch = branch_res.stdout.strip() or "anima-support"
+                reset_res = subprocess.run(["git", "reset", "--hard", f"origin/{curr_branch}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+                if reset_res.returncode == 0:
+                    print(f"[Update] Git CLI auto-synced with origin/{curr_branch}")
+                    updated = True
 except Exception as e:
     pass
 

@@ -555,6 +555,27 @@ def _get_anima_reference_model(model):
         )
         _anima_reference_sampler_cache[ckpt_filename] = cached
 
+    # Free duplicate DiT weights from Fooocus so only ONE copy of the 4.5 GB model exists in VRAM
+    try:
+        import modules.default_pipeline as _dp
+        if hasattr(_dp, "model_base") and getattr(_dp.model_base, "unet", None) is not None:
+            base_unet = _dp.model_base.unet
+            if hasattr(base_unet, "model") and hasattr(base_unet.model, "diffusion_model"):
+                if base_unet.model.diffusion_model is not cached.model.diffusion_model:
+                    old_diff = base_unet.model.diffusion_model
+                    base_unet.model.diffusion_model = cached.model.diffusion_model
+                    del old_diff
+        if hasattr(model, "model") and hasattr(model.model, "diffusion_model"):
+            if model.model.diffusion_model is not cached.model.diffusion_model:
+                old_diff = model.model.diffusion_model
+                model.model.diffusion_model = cached.model.diffusion_model
+                del old_diff
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except Exception as e:
+        pass
+
     out_model = cached.clone()
 
     loras_to_load = getattr(model, "loras_to_load", None)
@@ -582,6 +603,35 @@ def _get_anima_reference_model(model):
             except Exception as e:
                 print(f"[AnimaSampler] Failed to apply LoRA {lora_path}: {e}")
 
+    # Force ComfyUI to evaluate CFG (positive & negative) sequentially with batch_size=1
+    # on VRAM-constrained GPUs (<= 18 GB like Tesla T4), cutting peak DiT self-attention memory in half
+    # and preventing CUDA OOM during Upscale 1.5x / 2x.
+    try:
+        base_model_obj = out_model.model
+        orig_mem_req = getattr(base_model_obj, "_orig_memory_required", None)
+        if orig_mem_req is None:
+            orig_mem_req = base_model_obj.memory_required
+            base_model_obj._orig_memory_required = orig_mem_req
+
+        def _anima_memory_required(input_shape, cond_shapes=None):
+            if cond_shapes is None:
+                cond_shapes = {}
+            batch = input_shape[0] if len(input_shape) > 0 else 1
+            if batch > 1:
+                dev = getattr(base_model_obj, "load_device", None)
+                if dev is not None and dev.type == "cuda":
+                    total_vram = torch.cuda.get_device_properties(dev).total_memory
+                    if total_vram <= 20 * (1024**3):
+                        return 1e12
+            try:
+                return orig_mem_req(input_shape, cond_shapes=cond_shapes)
+            except Exception:
+                return 0
+
+        base_model_obj.memory_required = _anima_memory_required
+    except Exception as e:
+        pass
+
     return out_model
 
 
@@ -607,7 +657,11 @@ def generate_empty_latent(width=1024, height=1024, batch_size=1):
 @torch.no_grad()
 @torch.inference_mode()
 def decode_vae(vae, latent_image, tiled=False):
-    if tiled:
+    if hasattr(vae, "first_stage_model") and hasattr(vae.first_stage_model, "to") and hasattr(vae, "device"):
+        vae.first_stage_model.to(vae.device)
+    samples = latent_image.get("samples") if isinstance(latent_image, dict) else latent_image
+    is_5d = samples is not None and getattr(samples, "ndim", 4) == 5
+    if tiled and not is_5d:
         return opVAEDecodeTiled.decode(samples=latent_image, vae=vae, tile_size=512)[0]
     else:
         return opVAEDecode.decode(samples=latent_image, vae=vae)[0]
@@ -616,7 +670,12 @@ def decode_vae(vae, latent_image, tiled=False):
 @torch.no_grad()
 @torch.inference_mode()
 def encode_vae(vae, pixels, tiled=False):
-    if tiled:
+    if hasattr(vae, "first_stage_model") and hasattr(vae.first_stage_model, "to") and hasattr(vae, "device"):
+        vae.first_stage_model.to(vae.device)
+    is_3d_vae = getattr(vae, "latent_dim", 2) == 3 or (
+        hasattr(vae, "first_stage_model") and getattr(vae.first_stage_model, "latent_dim", 2) == 3
+    )
+    if tiled and not is_3d_vae:
         return opVAEEncodeTiled.encode(pixels=pixels, vae=vae, tile_size=512)[0]
     else:
         return opVAEEncode.encode(pixels=pixels, vae=vae)[0]
@@ -763,6 +822,12 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
+            try:
+                free_mem, total_mem = torch.cuda.mem_get_info()
+                print(f"[AnimaSampler] GPU VRAM before sampling: {free_mem / (1024**2):.1f} MB free / {total_mem / (1024**2):.1f} MB total")
+            except Exception:
+                pass
+
         comfy_sample, _comfy_sd = _load_anima_reference_modules()
         reference_model = _get_anima_reference_model(model)
         if reference_model is not None and comfy_sample is not None:
@@ -798,6 +863,10 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
                     reference_model.unpatch_model()
                 except Exception:
                     pass
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+
             out = latent.copy()
             out["samples"] = samples
             return out

@@ -273,11 +273,11 @@ def prepare_text_encoder(async_call=True):
         # TODO: make sure that this is always called in an async way so that users cannot feel it.
         pass
     assert_model_integrity()
+    if is_anima_model():
+        return
     if final_clip is not None and final_expansion is not None:
         ldm_patched.modules.model_management.load_models_gpu([final_clip.patcher, final_expansion.patcher])
     elif final_expansion is not None:
-        ldm_patched.modules.model_management.load_models_gpu([final_expansion.patcher])
-    elif is_anima_model() and final_expansion is not None:
         ldm_patched.modules.model_management.load_models_gpu([final_expansion.patcher])
     return
 
@@ -431,9 +431,10 @@ def process_diffusion(positive_cond, negative_cond, steps, switch, width, height
     sigma_max = float(sigma_max.cpu().numpy())
     print(f'[Sampler] sigma_min = {sigma_min}, sigma_max = {sigma_max}')
 
-    modules.patch.BrownianTreeNoiseSamplerPatched.global_init(
-        initial_latent['samples'].to(ldm_patched.modules.model_management.get_torch_device()),
-        sigma_min, sigma_max, seed=image_seed, cpu=False)
+    if not is_anima_model():
+        modules.patch.BrownianTreeNoiseSamplerPatched.global_init(
+            initial_latent['samples'].to(ldm_patched.modules.model_management.get_torch_device()),
+            sigma_min, sigma_max, seed=image_seed, cpu=False)
 
     decoded_latent = None
 
@@ -574,4 +575,7 @@ def process_diffusion(positive_cond, negative_cond, steps, switch, width, height
 
     images = core.pytorch_to_numpy(decoded_latent)
     modules.patch.patch_settings[os.getpid()].eps_record = None
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
     return images

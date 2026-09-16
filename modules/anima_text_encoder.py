@@ -275,6 +275,9 @@ class AnimaTextEncoder:
             token_ids = extra.get("t5xxl_ids")
             token_weights = extra.get("t5xxl_weights")
             self.reference_model.to(self.offload_device)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
 
             if token_ids is None:
                 token_ids = torch.zeros(hidden_states.shape[1], dtype=torch.long)

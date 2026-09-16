@@ -620,13 +620,9 @@ def worker():
         initial_latent = core.encode_vae(
             vae=candidate_vae,
             pixels=initial_pixels, tiled=True)
-        if hasattr(candidate_vae, "first_stage_model"):
-            try:
-                candidate_vae.first_stage_model.cpu()
-            except Exception:
-                pass
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
 
         latent_samples = initial_latent['samples']
         if latent_samples.ndim == 5:
