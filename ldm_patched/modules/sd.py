@@ -182,6 +182,7 @@ class VAE:
         self.memory_used_decode = lambda shape, dtype: (2178 * shape[2] * shape[3] * 64) * model_management.dtype_size(dtype)
         self.downscale_ratio = 8
         self.latent_channels = 4
+        self.latent_dim = 2
 
         if config is None:
             if "decoder.mid.block_1.mix_factor" in sd:
@@ -280,7 +281,7 @@ class VAE:
 
     def decode(self, samples_in):
         try:
-            if self.latent_dim == 3 and samples_in.ndim == 4:
+            if getattr(self, 'latent_dim', 2) == 3 and samples_in.ndim == 4:
                 samples_in = samples_in.unsqueeze(2)
 
             memory_used = self.memory_used_decode(samples_in.shape, self.vae_dtype)
@@ -302,7 +303,7 @@ class VAE:
             print("Warning: Ran out of memory when regular VAE decoding, retrying with tiled VAE decoding.")
             pixel_samples = self.decode_tiled_(samples_in)
 
-        if self.latent_dim == 3 and pixel_samples.ndim == 5 and pixel_samples.shape[2] == 1:
+        if getattr(self, 'latent_dim', 2) == 3 and pixel_samples.ndim == 5 and pixel_samples.shape[2] == 1:
             pixel_samples = pixel_samples.squeeze(2)
         pixel_samples = pixel_samples.to(self.output_device).movedim(1,-1)
         return pixel_samples
