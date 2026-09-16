@@ -22,8 +22,8 @@ rembg>=2.0.57
 groundingdino-py>=0.4.0
 segment_anything>=1.0
 cupy-cuda12x>=13.0.0,<14.0.0
-starlette>=0.37.0
-fastapi>=0.112.0
+starlette==0.37.2
+fastapi==0.112.2
 sentencepiece>=0.2.0
 comfy-aimdo>=0.5.0
 comfy-kitchen>=0.2.0
