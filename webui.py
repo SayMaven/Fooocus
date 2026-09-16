@@ -211,6 +211,9 @@ with shared.gradio_root:
                                 uov_input_image = grh.Image(label='Image', source='upload', type='numpy', show_label=False)
                             with gr.Column():
                                 uov_method = gr.Radio(label='Upscale or Variation:', choices=flags.uov_list, value=modules.config.default_uov_method)
+                                uov_upscale_choices = ['Default (Fooocus)'] + modules.config.upscale_filenames
+                                uov_upscale_value = modules.config.default_upscale_model_name if modules.config.default_upscale_model_name in uov_upscale_choices else 'Default (Fooocus)'
+                                uov_upscale_model = gr.Dropdown(label='Upscaler', choices=uov_upscale_choices, value=uov_upscale_value, show_label=True)
                                 gr.HTML('<a href="https://github.com/lllyasviel/Fooocus/discussions/390" target="_blank">\U0001F4D4 Documentation</a>')
                     with gr.Tab(label='Image Prompt', id='ip_tab') as ip_tab:
                         with gr.Row():
@@ -387,6 +390,10 @@ with shared.gradio_root:
                             with gr.Column():
                                 enhance_uov_method = gr.Radio(label='Upscale or Variation:', choices=flags.uov_list,
                                                               value=modules.config.default_enhance_uov_method)
+                                enhance_uov_upscale_choices = ['Default (Fooocus)'] + modules.config.upscale_filenames
+                                enhance_uov_upscale_value = modules.config.default_enhance_uov_upscale_model if modules.config.default_enhance_uov_upscale_model in enhance_uov_upscale_choices else 'Default (Fooocus)'
+                                enhance_uov_upscale_model = gr.Dropdown(label='Upscaler', choices=enhance_uov_upscale_choices,
+                                                                        value=enhance_uov_upscale_value, show_label=True)
                                 enhance_uov_processing_order = gr.Radio(label='Order of Processing',
                                                                         info='Use before to enhance small details and after to enhance large areas.',
                                                                         choices=flags.enhancement_uov_processing_order,
@@ -891,12 +898,16 @@ with shared.gradio_root:
                     for i in range(modules.config.default_max_lora_number):
                         results += [gr.update(interactive=True),
                                     gr.update(choices=['None'] + modules.config.lora_filenames), gr.update()]
+                    results += [gr.update(choices=['Default (Fooocus)'] + modules.config.upscale_filenames)]
+                    results += [gr.update(choices=['Default (Fooocus)'] + modules.config.upscale_filenames)]
                     return results
 
                 refresh_files_output = [base_model, refiner_model, vae_name]
                 if not args_manager.args.disable_preset_selection:
                     refresh_files_output += [preset_selection]
-                refresh_files.click(refresh_files_clicked, [], refresh_files_output + lora_ctrls,
+                refresh_files_output += lora_ctrls
+                refresh_files_output += [uov_upscale_model, enhance_uov_upscale_model]
+                refresh_files.click(refresh_files_clicked, [], refresh_files_output,
                                     queue=False, show_progress=False)
 
         state_is_generating = gr.State(False)
@@ -997,7 +1008,7 @@ with shared.gradio_root:
 
         ctrls += [base_model, refiner_model, refiner_switch] + lora_ctrls
         ctrls += [input_image_checkbox, current_tab]
-        ctrls += [uov_method, uov_input_image]
+        ctrls += [uov_method, uov_input_image, uov_upscale_model]
         ctrls += [outpaint_selections, inpaint_input_image, inpaint_additional_prompt, inpaint_mask_image]
         ctrls += [disable_preview, disable_intermediate_results, disable_seed_increment, black_out_nsfw]
         ctrls += [adm_scaler_positive, adm_scaler_negative, adm_scaler_end, adaptive_cfg, clip_skip]
@@ -1017,8 +1028,8 @@ with shared.gradio_root:
 
         ctrls += ip_ctrls
         ctrls += [debugging_dino, dino_erode_or_dilate, debugging_enhance_masks_checkbox,
-                  enhance_input_image, enhance_checkbox, enhance_uov_method, enhance_uov_processing_order,
-                  enhance_uov_prompt_type]
+                  enhance_input_image, enhance_checkbox, enhance_uov_method, enhance_uov_upscale_model,
+                  enhance_uov_processing_order, enhance_uov_prompt_type]
         ctrls += enhance_ctrls
 
         def parse_meta(raw_prompt_txt, is_generating):

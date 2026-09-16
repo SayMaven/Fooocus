@@ -51,6 +51,7 @@ class AsyncTask:
         self.current_tab = args.pop()
         self.uov_method = args.pop()
         self.uov_input_image = args.pop()
+        self.uov_upscale_model = args.pop()
         self.outpaint_selections = args.pop()
         self.inpaint_input_image = args.pop()
         self.inpaint_additional_prompt = args.pop()
@@ -116,6 +117,7 @@ class AsyncTask:
         self.enhance_input_image = args.pop()
         self.enhance_checkbox = args.pop()
         self.enhance_uov_method = args.pop()
+        self.enhance_uov_upscale_model = args.pop()
         self.enhance_uov_processing_order = args.pop()
         self.enhance_uov_prompt_type = args.pop()
         self.enhance_ctrls = []
@@ -574,12 +576,15 @@ def worker():
             async_task.inpaint_respective_field = 1.0
         return inpaint_image, inpaint_mask
 
-    def apply_upscale(async_task, uov_input_image, uov_method, switch, current_progress, advance_progress=False):
+    def apply_upscale(async_task, uov_input_image, uov_method, switch, current_progress, advance_progress=False, upscale_model_name=None):
         H, W, C = uov_input_image.shape
         if advance_progress:
             current_progress += 1
-        progressbar(async_task, current_progress, f'Upscaling image from {str((W, H))} ...')
-        uov_input_image = perform_upscale(uov_input_image)
+        if upscale_model_name is None:
+            upscale_model_name = getattr(async_task, 'uov_upscale_model', None)
+        model_display = os.path.basename(upscale_model_name) if upscale_model_name else 'Default (Fooocus)'
+        progressbar(async_task, current_progress, f'Upscaling image from {str((W, H))} using {model_display} ...')
+        uov_input_image = perform_upscale(uov_input_image, upscale_model_path=upscale_model_name)
         print(f'Image upscaled.')
         if '1.5x' in uov_method:
             f = 1.5
@@ -932,8 +937,12 @@ def worker():
             inpaint_image = HWC3(inpaint_image)
             if isinstance(inpaint_image, np.ndarray) and isinstance(inpaint_mask, np.ndarray) \
                     and (np.any(inpaint_mask > 127) or len(async_task.outpaint_selections) > 0):
-                progressbar(async_task, 1, 'Downloading upscale models ...')
-                modules.config.downloading_upscale_model()
+                default_model_path = os.path.join(modules.config.path_upscale_models, 'fooocus_upscaler_s409985e5.bin')
+                if not os.path.exists(default_model_path):
+                    existing_models = [f for f in os.listdir(modules.config.path_upscale_models) if f.endswith(('.pth', '.safetensors', '.bin', '.pt'))] if os.path.exists(modules.config.path_upscale_models) else []
+                    if not existing_models:
+                        progressbar(async_task, 1, 'Downloading upscale models ...')
+                        modules.config.downloading_upscale_model()
                 if inpaint_parameterized:
                     progressbar(async_task, 1, 'Downloading inpainter ...')
                     inpaint_head_model_path, inpaint_patch_model_path = modules.config.downloading_inpaint_models(
@@ -973,7 +982,7 @@ def worker():
         return base_model_additional_loras, clip_vision_path, controlnet_canny_path, controlnet_cpds_path, inpaint_head_model_path, inpaint_image, inpaint_mask, ip_adapter_face_path, ip_adapter_path, ip_negative_path, skip_prompt_processing, use_synthetic_refiner
 
     def prepare_upscale(async_task, goals, uov_input_image, uov_method, performance, steps, current_progress,
-                        advance_progress=False, skip_prompt_processing=False):
+                        advance_progress=False, skip_prompt_processing=False, upscale_model_name=None):
         uov_input_image = HWC3(uov_input_image)
         if 'vary' in uov_method:
             goals.append('vary')
@@ -987,8 +996,25 @@ def worker():
 
             if advance_progress:
                 current_progress += 1
-            progressbar(async_task, current_progress, 'Downloading upscale models ...')
-            modules.config.downloading_upscale_model()
+
+            if upscale_model_name is None:
+                upscale_model_name = getattr(async_task, 'uov_upscale_model', None)
+
+            model_str = str(upscale_model_name).strip() if upscale_model_name else ''
+            is_default = not model_str or model_str in ['Default (Fooocus)', 'Default', 'default', 'fooocus_upscaler', 'None']
+            if is_default:
+                default_file = os.path.join(modules.config.path_upscale_models, 'fooocus_upscaler_s409985e5.bin')
+                if not os.path.exists(default_file):
+                    progressbar(async_task, current_progress, 'Downloading upscale models ...')
+                    modules.config.downloading_upscale_model()
+            else:
+                custom_file = os.path.join(modules.config.path_upscale_models, model_str)
+                if not os.path.exists(custom_file) and not os.path.exists(model_str):
+                    default_file = os.path.join(modules.config.path_upscale_models, 'fooocus_upscaler_s409985e5.bin')
+                    if not os.path.exists(default_file):
+                        progressbar(async_task, current_progress, 'Downloading upscale models ...')
+                        modules.config.downloading_upscale_model()
+
         return uov_input_image, skip_prompt_processing, steps
 
     def prepare_enhance_prompt(prompt: str, fallback_prompt: str):
@@ -1021,7 +1047,8 @@ def worker():
                 async_task, async_task.enhance_uov_method, denoising_strength, img, switch, current_progress)
         if 'upscale' in goals:
             direct_return, img, denoising_strength, initial_latent, tiled, width, height, current_progress = apply_upscale(
-                async_task, img, async_task.enhance_uov_method, switch, current_progress)
+                async_task, img, async_task.enhance_uov_method, switch, current_progress,
+                upscale_model_name=getattr(async_task, 'enhance_uov_upscale_model', None))
             if direct_return:
                 d = [('Upscale (Fast)', 'upscale_fast', '2x')]
                 if modules.config.default_black_out_nsfw or async_task.black_out_nsfw:
@@ -1079,7 +1106,8 @@ def worker():
         goals_enhance = []
         img, skip_prompt_processing, steps = prepare_upscale(
             async_task, goals_enhance, img, async_task.enhance_uov_method, async_task.performance_selection,
-            enhance_steps, current_progress)
+            enhance_steps, current_progress,
+            upscale_model_name=getattr(async_task, 'enhance_uov_upscale_model', None))
         steps, _, _, _ = apply_overrides(async_task, steps, height, width)
         exception_result = ''
         if len(goals_enhance) > 0:
@@ -1216,7 +1244,8 @@ def worker():
         if 'upscale' in goals:
             direct_return, async_task.uov_input_image, denoising_strength, initial_latent, tiled, width, height, current_progress = apply_upscale(
                 async_task, async_task.uov_input_image, async_task.uov_method, switch, current_progress,
-                advance_progress=True)
+                advance_progress=True,
+                upscale_model_name=getattr(async_task, 'uov_upscale_model', None))
             if direct_return:
                 d = [('Upscale (Fast)', 'upscale_fast', '2x')]
                 if modules.config.default_black_out_nsfw or async_task.black_out_nsfw:

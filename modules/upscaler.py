@@ -14,18 +14,30 @@ model = None
 loaded_model_filename = None
 
 
-def get_upscale_model_filename():
-    import modules.config as config
-    custom_model = getattr(config, 'default_upscale_model', None)
-    if custom_model:
-        custom_path = os.path.join(path_upscale_models, custom_model)
-        if os.path.exists(custom_path):
-            return custom_path
+def get_upscale_model_filename(model_name=None):
+    if model_name:
+        model_str = str(model_name).strip()
+        if model_str not in ['Default (Fooocus)', 'Default', 'default', 'fooocus_upscaler', 'None', '']:
+            if os.path.exists(model_str):
+                return model_str
+            custom_path = os.path.join(path_upscale_models, model_str)
+            if os.path.exists(custom_path):
+                return custom_path
 
-    if os.path.exists(path_upscale_models):
-        for f in os.listdir(path_upscale_models):
-            if f.endswith(('.pth', '.safetensors', '.bin', '.pt')) and f != 'fooocus_upscaler_s409985e5.bin':
-                return os.path.join(path_upscale_models, f)
+    import modules.config as config
+    config_default = getattr(config, 'default_upscale_model', None)
+    if config_default:
+        config_str = str(config_default).strip()
+        if config_str not in ['Default (Fooocus)', 'Default', 'default', 'fooocus_upscaler', 'None', '']:
+            if os.path.exists(config_str):
+                return config_str
+            custom_path = os.path.join(path_upscale_models, config_str)
+            if os.path.exists(custom_path):
+                return custom_path
+
+    default_path = os.path.join(path_upscale_models, 'fooocus_upscaler_s409985e5.bin')
+    if os.path.exists(default_path):
+        return default_path
 
     return downloading_upscale_model()
 
@@ -33,9 +45,8 @@ def get_upscale_model_filename():
 def perform_upscale(img, upscale_model_path=None):
     global model, loaded_model_filename
 
-    print(f'Upscaling image with shape {str(img.shape)} ...')
-
-    target_model_filename = upscale_model_path or get_upscale_model_filename()
+    target_model_filename = get_upscale_model_filename(upscale_model_path)
+    print(f'Upscaling image with shape {str(img.shape)} using {os.path.basename(target_model_filename)} ...')
 
     if model is None or loaded_model_filename != target_model_filename:
         print(f'[Upscaler] Loading upscale model: {os.path.basename(target_model_filename)}')

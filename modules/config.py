@@ -512,6 +512,12 @@ default_uov_method = get_config_item_or_set_default(
     validator=lambda x: x in modules.flags.uov_list,
     expected_type=str
 )
+default_upscale_model = default_upscale_model_name = get_config_item_or_set_default(
+    key='default_upscale_model',
+    default_value='Default (Fooocus)',
+    validator=lambda x: isinstance(x, str),
+    expected_type=str
+)
 default_controlnet_image_count = get_config_item_or_set_default(
     key='default_controlnet_image_count',
     default_value=4,
@@ -625,6 +631,12 @@ default_enhance_uov_method = get_config_item_or_set_default(
     default_value=modules.flags.disabled,
     validator=lambda x: x in modules.flags.uov_list,
     expected_type=int
+)
+default_enhance_uov_upscale_model = get_config_item_or_set_default(
+    key='default_enhance_uov_upscale_model',
+    default_value='Default (Fooocus)',
+    validator=lambda x: isinstance(x, str),
+    expected_type=str
 )
 default_enhance_uov_processing_order = get_config_item_or_set_default(
     key='default_enhance_uov_processing_order',
@@ -804,6 +816,7 @@ model_filenames = []
 lora_filenames = []
 vae_filenames = []
 wildcard_filenames = []
+upscale_filenames = []
 
 
 def get_model_filenames(folder_paths, extensions=None, name_filter=None):
@@ -820,12 +833,13 @@ def get_model_filenames(folder_paths, extensions=None, name_filter=None):
 
 
 def update_files():
-    global model_filenames, lora_filenames, vae_filenames, wildcard_filenames, available_presets
+    global model_filenames, lora_filenames, vae_filenames, wildcard_filenames, available_presets, upscale_filenames
     model_filenames = get_model_filenames(paths_checkpoints)
     lora_filenames = get_model_filenames(paths_loras)
     vae_filenames = get_model_filenames(path_vae)
     wildcard_filenames = get_files_from_folder(path_wildcards, ['.txt'])
     available_presets = get_presets()
+    upscale_filenames = [f for f in get_model_filenames(path_upscale_models, ['.pth', '.safetensors', '.bin', '.pt']) if f != 'fooocus_upscaler_s409985e5.bin']
     return
 
 
