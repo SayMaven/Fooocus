@@ -1,4 +1,5 @@
 import os
+import sys
 import einops
 import torch
 import numpy as np
@@ -93,6 +94,8 @@ class StableDiffusionModel:
             loras_to_load.append((lora_filename, weight))
 
         self.unet_with_lora = self.unet.clone() if self.unet is not None else None
+        if self.unet_with_lora is not None:
+            self.unet_with_lora.model_file = self.filename
         self.clip_with_lora = self.clip.clone() if self.clip is not None else None
 
         for lora_filename, weight in loras_to_load:
@@ -149,6 +152,8 @@ def apply_controlnet(positive, negative, control_net, image, strength, start_per
 def load_model(ckpt_filename, vae_filename=None):
     unet, clip, vae, vae_filename, clip_vision = load_checkpoint_guess_config(ckpt_filename, embedding_directory=path_embeddings,
                                                                 vae_filename_param=vae_filename)
+    if unet is not None:
+        unet.model_file = ckpt_filename
     return StableDiffusionModel(unet=unet, clip=clip, vae=vae, clip_vision=clip_vision, filename=ckpt_filename, vae_filename=vae_filename)
 
 
@@ -277,6 +282,14 @@ def _load_anima_reference_modules():
 
 def _get_anima_reference_model(model):
     ckpt_filename = getattr(model, "model_file", None)
+    if not ckpt_filename and hasattr(model, "filename"):
+        ckpt_filename = model.filename
+    if not ckpt_filename:
+        try:
+            import modules.default_pipeline as _dp
+            ckpt_filename = getattr(_dp.model_base, "filename", None)
+        except Exception:
+            pass
     if not ckpt_filename:
         return None
 
@@ -285,26 +298,27 @@ def _get_anima_reference_model(model):
         return None
 
     cached = _anima_reference_sampler_cache.get(ckpt_filename)
-    if cached is not None:
-        return cached
+    if cached is None:
+        cached, _clip, _vae, _clipvision = comfy_sd.load_checkpoint_guess_config(
+            ckpt_filename,
+            output_vae=False,
+            output_clip=False,
+            output_clipvision=False,
+            embedding_directory=path_embeddings,
+        )
+        _anima_reference_sampler_cache[ckpt_filename] = cached
 
-    comfy_model, _clip, _vae, _clipvision = comfy_sd.load_checkpoint_guess_config(
-        ckpt_filename,
-        output_vae=False,
-        output_clip=False,
-        output_clipvision=False,
-        embedding_directory=path_embeddings,
-    )
-    _anima_reference_sampler_cache[ckpt_filename] = comfy_model
-    return comfy_model
+    out_model = cached.clone()
+    patches = getattr(model, "patches", None)
+    if patches:
+        out_model.patches = {k: list(v) for k, v in patches.items()}
+    return out_model
 
 
 def _can_use_anima_reference_sampler(model, refiner):
     if refiner is not None:
         return False
     if not _is_anima_model_patcher(model):
-        return False
-    if getattr(model, "patches", {}):
         return False
     # Auto-bootstrap the ComfyUI reference checkout the first time we hit this for an Anima model.
     # Fooocus' standard sampler does not support Anima's 5D (B,C,T,H,W) latents, so without

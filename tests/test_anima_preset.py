@@ -18,7 +18,7 @@ class TestAnimaPreset(unittest.TestCase):
         self.assertEqual(preset['default_cfg_scale'], 4.5)
         self.assertEqual(preset['default_performance'], 'Quality')
         self.assertEqual(preset['default_advanced_checkbox'], True)
-        self.assertEqual(preset['default_image_number'], 32)
+        self.assertEqual(preset['default_image_number'], 1)
         self.assertEqual(preset['default_save_metadata_to_images'], True)
         self.assertEqual(preset['default_metadata_scheme'], 'a1111')
         self.assertEqual(
