@@ -620,7 +620,19 @@ def worker():
         initial_latent = core.encode_vae(
             vae=candidate_vae,
             pixels=initial_pixels, tiled=True)
-        B, C, H, W = initial_latent['samples'].shape
+        if hasattr(candidate_vae, "first_stage_model"):
+            try:
+                candidate_vae.first_stage_model.cpu()
+            except Exception:
+                pass
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        latent_samples = initial_latent['samples']
+        if latent_samples.ndim == 5:
+            B, C, T, H, W = latent_samples.shape
+        else:
+            B, C, H, W = latent_samples.shape
         width = W * 8
         height = H * 8
         print(f'Final resolution is {str((width, height))}.')

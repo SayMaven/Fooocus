@@ -760,6 +760,9 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
     disable_pbar = False
 
     if _can_use_anima_reference_sampler(model, refiner):
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
         comfy_sample, _comfy_sd = _load_anima_reference_modules()
         reference_model = _get_anima_reference_model(model)
         if reference_model is not None and comfy_sample is not None:

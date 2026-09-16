@@ -30,4 +30,14 @@ def perform_upscale(img):
     img = opImageUpscaleWithModel.upscale(model, img)[0]
     img = core.pytorch_to_numpy(img)[0]
 
+    if model is not None:
+        try:
+            model.cpu()
+        except Exception:
+            pass
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return img
+
