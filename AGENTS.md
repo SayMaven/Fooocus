@@ -21,9 +21,12 @@ Dokumen ini berisi pedoman operasional, batasan teknis, dan arsitektur kritis un
 - **Branch `main`:**
   - Versi stabil dasar. **JANGAN melakukan direct commit atau eksperimen langsung ke branch ini.**
 - **Branch `colab-support`:**
-  - Branch kerja aktif untuk adaptasi runtime Colab modern (Python 3.13+, CUDA 12.8+, Transformers 5.x).
-  - Semua perubahan kode harus di-commit dan di-push ke `origin colab-support`.
-  - Colab akan otomatis mendownload pembaruan via `git pull --ff-only` di `entry_with_update.py`.
+  - Branch kerja stabil untuk adaptasi runtime Colab modern (Python 3.13+, CUDA 12.8+, Transformers 5.x).
+- **Branch `anima-support`:**
+  - Branch pengembangan aktif untuk integrasi arsitektur ganda: **SDXL (UNet)** dan **Anima (DiT)**.
+  - Semua perubahan kode fitur Anima di-commit dan di-push ke branch ini.
+  - Perubahan di branch ini TIDAK BOLEH merusak fungsionalitas SDXL atau perbaikan runtime Colab yang sudah ada di `colab-support`.
+  - Folder referensi lokal `F:\CODE\forking\FooocusAnima` dijaga **100% READ ONLY**.
 
 ---
 
@@ -31,7 +34,7 @@ Dokumen ini berisi pedoman operasional, batasan teknis, dan arsitektur kritis un
 
 ### A. Kompatibilitas NumPy (`numpy>=1.26.0`)
 - **Masalah Legacy:** Fooocus aslinya mengunci `numpy==1.26.4`. Di Python 3.13 Colab, memaksa downgrade ke `numpy<2.0.0` memicu pip mengunduh `.tar.gz` dan mengompilasi dari source (Meson/Ninja) yang memakan waktu 15–25 menit hingga terlihat *stuck*.
-- **Kebijakan Saat Ini:** Di branch `colab-support`, syarat telah dilonggarkan ke `numpy>=1.26.0` (mendukung NumPy 2.x bawaan Colab).
+- **Kebijakan Saat Ini:** Di branch `colab-support` dan `anima-support`, syarat telah dilonggarkan ke `numpy>=1.26.0` (mendukung NumPy 2.x bawaan Colab).
 - **Aturan:** **JANGAN memaksa downgrade ke `numpy<2.0.0` atau `numpy==1.26.4`**. Biarkan Fooocus memakai NumPy bawaan Colab secara langsung tanpa instalasi ulang.
 
 ### B. Auto-Update Git Tanpa `pygit2`
@@ -52,16 +55,48 @@ Dokumen ini berisi pedoman operasional, batasan teknis, dan arsitektur kritis un
 
 ---
 
-## 4. Workflow Perubahan Kode & Pengujian
+## 4. Arsitektur Ganda: SDXL (UNet) + Anima (DiT)
 
-1. Lakukan modifikasi kode di branch `colab-support`.
+Fooocus mendukung eksekusi dua arsitektur berbeda secara bersamaan melalui *dynamic model dispatch*:
+
+### A. Perbedaan Inti Pipeline
+1. **SDXL (UNet):**
+   - Menggunakan dual CLIP (OpenCLIP + CLIP-L) yang termuat di checkpoint.
+   - Latent 4-channel (`(B, 4, H/8, W/8)`).
+   - VAE SDXL standar (4-channel).
+   - Sampler: Karras, Euler, DPM++ 2M, CFG 4.0 - 7.0.
+   - Fooocus V2 expansion aktif.
+2. **Anima (DiT):**
+   - Arsitektur backbone: DiT 28-block (`MiniTrainDIT` / `CosmosTransformer`).
+   - Text Conditioning: Qwen3-0.6B (`models/clip/qwen_3_06b_base.safetensors`) + T5 Tokenizer (IDs target-side) + `LLMAdapter` 6-block bridge (`crossattn_emb` (B, 512, 1024)).
+   - Latent format: Wan21 16-channel (`(B, 16, 1, H/8, W/8)`), normalisasi mean/std.
+   - VAE: Qwen-Image VAE (`WanVAE`, 16-channel, `models/vae/qwen_image_vae.safetensors`).
+   - Sampler: Flow Matching (Rectified Flow, `multiplier=1.0, shift=3.0`), `euler_ancestral` + `simple` scheduler, CFG 3.5 - 4.5.
+   - Prompting: Danbooru tags + natural language, padding wajib ke 512 tokens (attention sink).
+   - Fooocus V2 expansion dinonaktifkan otomatis untuk Anima (tidak cocok dengan token Danbooru).
+   - Previewer 4-channel di-bypass (karena 16-channel akan menyebabkan crash tensor mismatch).
+
+### B. Sampler Fallback & Reference Bootstrap ComfyUI
+- Di `modules/core.py`, saat sampling model Anima dilakukan, jika menggunakan anisotropic filter Fooocus native dapat memicu crash pada 5D tensor (`torch.pad` reflect mode NotImplemented).
+- Solusi: `_can_use_anima_reference_sampler()` secara otomatis mendeteksi model Anima dan melakukan bootstrap shallow reference ComfyUI sampler (`comfy.sample.sample`) bila tersedia.
+- Model non-Anima (SDXL) langsung melewati guard ini dan tetap menggunakan Fooocus native sampler biasa.
+
+---
+
+## 5. Workflow Perubahan Kode & Pengujian
+
+1. Lakukan modifikasi kode di branch `anima-support`.
 2. Validasi sintaks Python:
    ```powershell
    python -m py_compile <file_yang_diubah>
    ```
-3. Commit dan push ke GitHub:
+3. Jalankan pengujian unit test preset:
+   ```powershell
+   python -m unittest tests/test_anima_preset.py
+   ```
+4. Commit dan push ke GitHub:
    ```powershell
    git commit -am "Deskripsi perubahan"
-   git push origin colab-support
+   git push origin anima-support
    ```
-4. Instruksikan pengguna untuk me-restart sel Fooocus di Google Colab guna menguji fungsionalitasnya.
+5. Instruksikan pengguna untuk me-restart sel Fooocus di Google Colab guna menguji fungsionalitasnya.
