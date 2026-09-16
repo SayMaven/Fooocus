@@ -31,7 +31,7 @@ class TestAnimaPreset(unittest.TestCase):
             preset['default_prompt_negative'],
             'worst quality, low quality, score_1, score_2, score_3, artist name',
         )
-        self.assertEqual(preset['default_overwrite_step'], -1)
+        self.assertEqual(preset['default_overwrite_step'], 25)
         self.assertEqual(preset['default_aspect_ratio'], '1344*1344')
         self.assertEqual(preset['default_styles'], [])
         self.assertEqual(preset['default_refiner'], 'None')

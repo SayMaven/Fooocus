@@ -685,6 +685,9 @@ def worker():
             if use_expansion:
                 print('[Anima] Disabling Fooocus V2 expansion.')
                 use_expansion = False
+            if async_task.overwrite_step <= 0 and async_task.steps > 30:
+                print(f'[Anima] Tuning steps: {async_task.steps} -> 25')
+                async_task.steps = 25
             async_task.refiner_model_name = 'None'
 
         pipeline.set_clip_skip(async_task.clip_skip)
