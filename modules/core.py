@@ -195,6 +195,11 @@ _COMFY_AIMDO_STUBS = {
         'def vbars_reset_watermark_limits():\n'
         '    return None\n'
     ),
+    "storage.py": (
+        '"""Storage stubs for optional AIMDO integrations."""\n\n\n'
+        'def fast_disk(_path):\n'
+        '    return None\n'
+    ),
     "torch.py": (
         '"""Torch bridge stubs for optional AIMDO integrations."""\n\n'
         'import torch\n\n\n'
@@ -213,11 +218,81 @@ _COMFY_AIMDO_STUBS = {
 }
 
 
+def _register_aimdo_in_memory():
+    import types
+    if "comfy_aimdo" not in sys.modules:
+        m = types.ModuleType("comfy_aimdo")
+        sys.modules["comfy_aimdo"] = m
+    m = sys.modules["comfy_aimdo"]
+
+    if "comfy_aimdo.storage" not in sys.modules:
+        s = types.ModuleType("comfy_aimdo.storage")
+        s.fast_disk = lambda _path: None
+        m.storage = s
+        sys.modules["comfy_aimdo.storage"] = s
+
+    if "comfy_aimdo.host_buffer" not in sys.modules:
+        hb = types.ModuleType("comfy_aimdo.host_buffer")
+        class HostBuffer:
+            def __init__(self, size):
+                self.size = int(size)
+        hb.HostBuffer = HostBuffer
+        m.host_buffer = hb
+        sys.modules["comfy_aimdo.host_buffer"] = hb
+
+    if "comfy_aimdo.vram_buffer" not in sys.modules:
+        vb = types.ModuleType("comfy_aimdo.vram_buffer")
+        class VRAMBuffer:
+            def __init__(self, size, device_index=None):
+                self.size = int(size)
+                self.device_index = device_index
+        vb.VRAMBuffer = VRAMBuffer
+        m.vram_buffer = vb
+        sys.modules["comfy_aimdo.vram_buffer"] = vb
+
+    if "comfy_aimdo.model_vbar" not in sys.modules:
+        mv = types.ModuleType("comfy_aimdo.model_vbar")
+        class ModelVBAR:
+            def __init__(self, size, device_index=None):
+                self.size = int(size)
+                self.device_index = device_index
+            def loaded_size(self): return 0
+            def prioritize(self): return None
+        mv.ModelVBAR = ModelVBAR
+        mv.vbar_fault = lambda _v: None
+        mv.vbar_signature_compare = lambda _s, _o: True
+        mv.vbar_unpin = lambda _v: None
+        mv.vbars_analyze = lambda: 0
+        mv.vbars_reset_watermark_limits = lambda: None
+        m.model_vbar = mv
+        sys.modules["comfy_aimdo.model_vbar"] = mv
+
+    if "comfy_aimdo.torch" not in sys.modules:
+        ct = types.ModuleType("comfy_aimdo.torch")
+        ct.aimdo_to_tensor = lambda _v, device: torch.empty(0, device=device)
+        ct.hostbuf_to_tensor = lambda h: torch.empty(h.size, dtype=torch.uint8)
+        m.torch = ct
+        sys.modules["comfy_aimdo.torch"] = ct
+
+
+_register_aimdo_in_memory()
+
+
 def _default_anima_comfy_root():
     if os.path.isdir("/content"):
         return "/content/ComfyUI"
     fooocus_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(fooocus_root, "comfyui_tmp")
+
+
+def _ensure_aimdo_stubs_on_disk(comfy_root):
+    stub_dir = os.path.join(comfy_root, "comfy_aimdo")
+    os.makedirs(stub_dir, exist_ok=True)
+    for name, body in _COMFY_AIMDO_STUBS.items():
+        target = os.path.join(stub_dir, name)
+        if not os.path.exists(target):
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(body)
 
 
 def _bootstrap_anima_comfy_reference(comfy_root):
@@ -232,13 +307,7 @@ def _bootstrap_anima_comfy_reference(comfy_root):
              "https://github.com/comfyanonymous/ComfyUI.git", comfy_root],
             check=True,
         )
-    stub_dir = os.path.join(comfy_root, "comfy_aimdo")
-    os.makedirs(stub_dir, exist_ok=True)
-    for name, body in _COMFY_AIMDO_STUBS.items():
-        target = os.path.join(stub_dir, name)
-        if not os.path.exists(target):
-            with open(target, "w", encoding="utf-8") as f:
-                f.write(body)
+    _ensure_aimdo_stubs_on_disk(comfy_root)
     os.environ["FOOOCUS_ANIMA_COMFY_ROOT"] = comfy_root
     print(f"[Anima] FOOOCUS_ANIMA_COMFY_ROOT={comfy_root}")
     return comfy_root
@@ -256,9 +325,7 @@ def _get_anima_reference_comfy_root(auto_bootstrap=False):
             continue
         if not os.path.exists(os.path.join(root, "comfy", "sd.py")):
             continue
-        if any(not os.path.exists(os.path.join(root, "comfy_aimdo", name))
-               for name in _COMFY_AIMDO_STUBS):
-            continue
+        _ensure_aimdo_stubs_on_disk(root)
         return root
     if auto_bootstrap:
         try:
@@ -269,6 +336,7 @@ def _get_anima_reference_comfy_root(auto_bootstrap=False):
 
 
 def _load_anima_reference_modules():
+    _register_aimdo_in_memory()
     comfy_root = _get_anima_reference_comfy_root()
     if comfy_root is None:
         return None, None

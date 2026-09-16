@@ -96,6 +96,12 @@ class AnimaTextEncoder:
                 return False
 
             print(f"[AnimaTextEncoder] Using ComfyUI root: {comfy_root}")
+            try:
+                from modules.core import _register_aimdo_in_memory, _ensure_aimdo_stubs_on_disk
+                _register_aimdo_in_memory()
+                _ensure_aimdo_stubs_on_disk(str(comfy_root))
+            except Exception:
+                pass
             self._reset_comfy_modules(comfy_root)
 
             from safetensors.torch import load_file
