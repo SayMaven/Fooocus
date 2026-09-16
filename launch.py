@@ -60,6 +60,18 @@ def prepare_environment():
             elif platform.system() == "Linux":
                 run_pip(f"install -U -I --no-deps {xformers_package}", "xformers")
 
+    if platform.system() == "Linux" and sys.version_info >= (3, 13):
+        try:
+            import importlib.metadata
+            import packaging.version
+            current_np = packaging.version.parse(importlib.metadata.version("numpy"))
+            if current_np >= packaging.version.parse("2.0.0"):
+                print("[Launch] Detected Python 3.13 on Linux with NumPy >= 2.0.0.")
+                print("[Launch] Installing pre-compiled NumPy 1.26.4 wheel to bypass 7-minute source compilation...")
+                run_pip("install https://github.com/SayMaven/ColabFoocus/raw/main/numpy-1.26.4-cp313-cp313-linux_x86_64.whl", "pre-compiled numpy 1.26.4")
+        except Exception as e:
+            pass
+
     if REINSTALL_ALL:
         run_pip(f"install -r \"{requirements_file}\"", "requirements")
     else:

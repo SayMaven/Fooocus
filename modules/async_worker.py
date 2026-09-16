@@ -470,7 +470,11 @@ def worker():
             refiner_swap_method=async_task.refiner_swap_method
         )
         initial_latent = core.encode_vae(vae=candidate_vae, pixels=initial_pixels)
-        B, C, H, W = initial_latent['samples'].shape
+        latent_samples = initial_latent['samples']
+        if latent_samples.ndim == 5:
+            B, C, T, H, W = latent_samples.shape
+        else:
+            B, C, H, W = latent_samples.shape
         width = W * 8
         height = H * 8
         print(f'Final resolution is {str((width, height))}.')

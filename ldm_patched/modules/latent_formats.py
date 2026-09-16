@@ -144,11 +144,15 @@ class Wan21(LatentFormat):
         self.taesd_decoder_name = "lighttaew2_1"
 
     def process_in(self, latent):
+        if hasattr(latent, "ndim") and latent.ndim == 4:
+            latent = latent.unsqueeze(2)
         latents_mean = self.latents_mean.to(latent.device, latent.dtype)
         latents_std = self.latents_std.to(latent.device, latent.dtype)
         return (latent - latents_mean) * self.scale_factor / latents_std
 
     def process_out(self, latent):
+        if hasattr(latent, "ndim") and latent.ndim == 4:
+            latent = latent.unsqueeze(2)
         latents_mean = self.latents_mean.to(latent.device, latent.dtype)
         latents_std = self.latents_std.to(latent.device, latent.dtype)
         return latent * latents_std / self.scale_factor + latents_mean

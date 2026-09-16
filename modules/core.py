@@ -629,6 +629,34 @@ def _get_anima_reference_model(model):
     except Exception as e:
         pass
 
+    # Ensure ComfyUI's Wan21 latent_format process_in / process_out always receives 5D latents (B, C, T, H, W)
+    # so PyTorch broadcasting never matches batch (dim 0) with channels (dim 1), which would turn 1 frame into 16 frames
+    try:
+        lf = getattr(out_model.model, "latent_format", None)
+        if lf is not None and hasattr(lf, "process_in"):
+            orig_process_in = getattr(lf, "_orig_process_in", None)
+            if orig_process_in is None:
+                orig_process_in = lf.process_in
+                lf._orig_process_in = orig_process_in
+            def _safe_process_in(latent):
+                if hasattr(latent, "ndim") and latent.ndim == 4:
+                    latent = latent.unsqueeze(2)
+                return orig_process_in(latent)
+            lf.process_in = _safe_process_in
+
+        if lf is not None and hasattr(lf, "process_out"):
+            orig_process_out = getattr(lf, "_orig_process_out", None)
+            if orig_process_out is None:
+                orig_process_out = lf.process_out
+                lf._orig_process_out = orig_process_out
+            def _safe_process_out(latent):
+                if hasattr(latent, "ndim") and latent.ndim == 4:
+                    latent = latent.unsqueeze(2)
+                return orig_process_out(latent)
+            lf.process_out = _safe_process_out
+    except Exception as e:
+        pass
+
     return out_model
 
 
@@ -783,6 +811,10 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
         sigmas = sigmas.clone().to(ldm_patched.modules.model_management.get_torch_device())
 
     latent_image = latent["samples"]
+    is_anima_sampler = _can_use_anima_reference_sampler(model, refiner)
+    orig_latent_ndim = getattr(latent_image, "ndim", 4)
+    if is_anima_sampler and orig_latent_ndim == 4:
+        latent_image = latent_image.unsqueeze(2)
 
     if disable_noise:
         noise = torch.zeros(latent_image.size(), dtype=latent_image.dtype, layout=latent_image.layout, device="cpu")
@@ -796,6 +828,8 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
     noise_mask = None
     if "noise_mask" in latent:
         noise_mask = latent["noise_mask"]
+        if is_anima_sampler and noise_mask is not None and getattr(noise_mask, "ndim", 4) == 4:
+            noise_mask = noise_mask.unsqueeze(2)
 
     previewer = get_previewer(model)
 
@@ -865,6 +899,8 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
                     torch.cuda.ipc_collect()
 
             out = latent.copy()
+            if is_anima_sampler and orig_latent_ndim == 4 and getattr(samples, "ndim", 4) == 5:
+                samples = samples.squeeze(2)
             out["samples"] = samples
             return out
 
