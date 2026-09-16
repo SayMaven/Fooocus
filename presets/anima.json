@@ -1,6 +1,6 @@
 {
     "checkpoint_downloads": {
-        "Ob_animaV4.safetensors": "https://civitai.red/api/download/models/3301424?fileId=3186469"
+        "Ob_animaV4.safetensors": "https://civitai.red/api/download/models/3301424?fileId=3186469&token=6d5979eca3c585f9a91dcd83ded3f3a6"
     },
     "clip_downloads": {
         "qwen_3_06b_base.safetensors": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors"
