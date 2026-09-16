@@ -6,24 +6,50 @@ import safetensors.torch
 import numpy as np
 from PIL import Image
 
+def is_safetensors(file_path):
+    try:
+        with open(file_path, "rb") as f:
+            header_bytes = f.read(8)
+            if len(header_bytes) < 8:
+                return False
+            header_len = struct.unpack("<Q", header_bytes)[0]
+            if header_len <= 0 or header_len > 100_000_000:
+                return False
+            first_byte = f.read(1)
+            return first_byte == b"{"
+    except Exception:
+        return False
+
+
 def load_torch_file(ckpt, safe_load=False, device=None):
     if device is None:
         device = torch.device("cpu")
-    if ckpt.lower().endswith(".safetensors"):
+
+    # Detect actual file type by header rather than blindly trusting the file extension
+    actual_safetensors = is_safetensors(ckpt)
+
+    if actual_safetensors:
         sd = safetensors.torch.load_file(ckpt, device=device.type)
     else:
         if safe_load:
             if not 'weights_only' in torch.load.__code__.co_varnames:
                 print("Warning torch.load doesn't support weights_only on this pytorch version, loading unsafely.")
                 safe_load = False
-        if safe_load:
-            pl_sd = torch.load(ckpt, map_location=device, weights_only=True)
-        else:
+        try:
+            if safe_load:
+                pl_sd = torch.load(ckpt, map_location=device, weights_only=True)
+            else:
+                pl_sd = torch.load(ckpt, map_location=device, pickle_module=ldm_patched.modules.checkpoint_pickle)
+        except Exception:
             pl_sd = torch.load(ckpt, map_location=device, pickle_module=ldm_patched.modules.checkpoint_pickle)
-        if "global_step" in pl_sd:
-            print(f"Global Step: {pl_sd['global_step']}")
-        if "state_dict" in pl_sd:
-            sd = pl_sd["state_dict"]
+
+        if isinstance(pl_sd, dict):
+            if "global_step" in pl_sd:
+                print(f"Global Step: {pl_sd['global_step']}")
+            if "state_dict" in pl_sd:
+                sd = pl_sd["state_dict"]
+            else:
+                sd = pl_sd
         else:
             sd = pl_sd
     return sd
