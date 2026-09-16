@@ -3,6 +3,33 @@ from urllib.parse import urlparse
 from typing import Optional
 
 
+def _get_civitai_token() -> Optional[str]:
+    token = os.environ.get("CIVITAI_API_TOKEN") or os.environ.get("CIVITAI_TOKEN")
+    if not token:
+        env_paths = [
+            os.path.join(os.getcwd(), ".env"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+        ]
+        for env_path in env_paths:
+            if os.path.isfile(env_path):
+                try:
+                    with open(env_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line or line.startswith("#") or "=" not in line:
+                                continue
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip("'\"")
+                            if k in ("CIVITAI_API_TOKEN", "CIVITAI_TOKEN") and v:
+                                token = v
+                                os.environ[k] = v
+                                return token
+                except Exception:
+                    pass
+    return token
+
+
 def load_file_from_url(
         url: str,
         *,
@@ -17,7 +44,7 @@ def load_file_from_url(
     domain = os.environ.get("HF_MIRROR", "https://huggingface.co").rstrip('/')
     url = str.replace(url, "https://huggingface.co", domain, 1)
 
-    civitai_token = os.environ.get("CIVITAI_API_TOKEN") or os.environ.get("CIVITAI_TOKEN")
+    civitai_token = _get_civitai_token()
     if civitai_token and ("civitai.com" in url or "civitai.red" in url) and "token=" not in url:
         sep = "&" if "?" in url else "?"
         url = f"{url}{sep}token={civitai_token}"
