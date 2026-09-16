@@ -72,5 +72,37 @@ class TestAnimaPreset(unittest.TestCase):
         self.assertIn('qwen_3_06b_base.safetensors', preset['clip_downloads'])
 
 
+    def test_anima_preset_uses_safe_defaults(self):
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        preset_path = os.path.join(repo_root, 'presets', 'anima.json')
+
+        with open(preset_path, encoding='utf-8') as f:
+            preset = json.load(f)
+
+        self.assertEqual(preset['default_model'], 'Ob_animaV4.safetensors')
+        self.assertEqual(preset['default_vae'], 'qwen_image_vae.safetensors')
+        self.assertEqual(preset['default_sampler'], 'euler_ancestral')
+        self.assertEqual(preset['default_scheduler'], 'simple')
+        self.assertEqual(preset['default_cfg_scale'], 4.5)
+
+    def test_anima_preset_lora_downloads(self):
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        preset_path = os.path.join(repo_root, 'presets', 'anima.json')
+
+        with open(preset_path, encoding='utf-8') as f:
+            preset = json.load(f)
+
+        expected_loras = [
+            '8in1BangDreamYumeMita_ANIMA.safetensors',
+            'DynamicPoser_slider_ANIMA.safetensors',
+            'SimpleFlatColorSketchStyle_ANIMA.safetensors',
+            'ColorGrade01_ANIMA.safetensors',
+            'ViolaBangDream_ANIMA.safetensors',
+            'Anima_in_real_v1.5_ANIMA.safetensors',
+        ]
+        for lora in expected_loras:
+            self.assertIn(lora, preset.get('lora_downloads', {}))
+
+
 if __name__ == '__main__':
     unittest.main()
