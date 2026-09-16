@@ -72,7 +72,11 @@ class AnimaTextEncoder:
     def _reset_comfy_modules(self, comfy_root):
         comfy_root_str = str(comfy_root)
         for name in list(sys.modules.keys()):
-            if not (name == "comfy" or name.startswith("comfy.") or name == "comfy_aimdo" or name.startswith("comfy_aimdo.")):
+            if name == "comfy_aimdo" or name.startswith("comfy_aimdo."):
+                continue
+            if name == "comfy_kitchen" or name.startswith("comfy_kitchen."):
+                continue
+            if not (name == "comfy" or name.startswith("comfy.")):
                 continue
             module = sys.modules.get(name)
             module_file = getattr(module, "__file__", "") or ""
@@ -96,13 +100,13 @@ class AnimaTextEncoder:
                 return False
 
             print(f"[AnimaTextEncoder] Using ComfyUI root: {comfy_root}")
+            self._reset_comfy_modules(comfy_root)
             try:
                 from modules.core import _register_aimdo_in_memory, _ensure_aimdo_stubs_on_disk
                 _register_aimdo_in_memory()
                 _ensure_aimdo_stubs_on_disk(str(comfy_root))
             except Exception:
                 pass
-            self._reset_comfy_modules(comfy_root)
 
             from safetensors.torch import load_file
             import comfy.text_encoders.anima as comfy_anima

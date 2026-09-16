@@ -274,16 +274,15 @@ def _register_aimdo_in_memory():
         m.torch = ct
         sys.modules["comfy_aimdo.torch"] = ct
 
-    if "comfy_kitchen" not in sys.modules:
-        class _ComfyKitchenStub(types.ModuleType):
-            def __getattr__(self, name):
-                if "available" in name or "supports" in name:
-                    return lambda *a, **k: False
-                return lambda *a, **k: None
-
-        ck = _ComfyKitchenStub("comfy_kitchen")
-        ck.int8_attention_is_available = lambda: False
-        sys.modules["comfy_kitchen"] = ck
+    # Ensure broken comfy_kitchen in-memory stub is not present so ComfyUI uses its native safe fallback via ImportError
+    if "comfy_kitchen" in sys.modules:
+        ck = sys.modules.get("comfy_kitchen")
+        if not isinstance(getattr(ck, "__file__", None), str) or not isinstance(getattr(ck, "__path__", None), (list, tuple)):
+            sys.modules.pop("comfy_kitchen", None)
+    if "comfy_kitchen.tensor" in sys.modules:
+        ckt = sys.modules.get("comfy_kitchen.tensor")
+        if not isinstance(getattr(ckt, "__file__", None), str):
+            sys.modules.pop("comfy_kitchen.tensor", None)
 
 
 _register_aimdo_in_memory()
