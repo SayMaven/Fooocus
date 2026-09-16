@@ -2,25 +2,34 @@
 <img src="https://raw.githubusercontent.com/SayMaven/ColabFoocus/main/assets/arale.png">
 </div>
 
-# Fooocus
+# Fooocus (SayMaven Fork - SDXL & Anima DiT Dual-Architecture)
 
 [>>> Click Here to Install Fooocus <<<](#download)
 
 Fooocus is an image generating software (based on [Gradio](https://www.gradio.app/) <a href='https://github.com/gradio-app/gradio'><img src='https://img.shields.io/github/stars/gradio-app/gradio'></a>).
 
-Fooocus presents a rethinking of image generator designs. The software is offline, open source, and free, while at the same time, similar to many online image generators like Midjourney, the manual tweaking is not needed, and users only need to focus on the prompts and images. Fooocus has also simplified the installation: between pressing "download" and generating the first image, the number of needed mouse clicks is strictly limited to less than 3. Minimal GPU memory requirement is 4GB (Nvidia).
+Fooocus presents a rethinking of image generator designs. The software is offline, open source, and free, while at the same time, similar to many online image generators like Midjourney, manual tweaking is not needed, and users only need to focus on prompts and images. Fooocus has also simplified installation: between pressing "download" and generating the first image, the number of needed mouse clicks is strictly limited to less than 3. Minimal GPU memory requirement is 4GB (Nvidia).
 
-**Recently many fake websites exist on Google when you search “fooocus”. Do not trust those – here is the only official source of Fooocus.**
+## 🚀 SayMaven Fork Highlights: SDXL & Anima DiT Support
 
-# Project Status: Limited Long-Term Support (LTS) with Bug Fixes Only
+This repository is an active fork extending Fooocus with **Dual-Architecture Support** and full compatibility with **modern Google Colab runtimes** (Python 3.13, CUDA 12.8+, PyTorch 2.x, Transformers 5.x):
 
-The Fooocus project, built entirely on the **Stable Diffusion XL** architecture, is now in a state of limited long-term support (LTS) with bug fixes only. As the existing functionalities are considered as nearly free of programmartic issues (Thanks to [mashb1t](https://github.com/mashb1t)'s huge efforts), future updates will focus exclusively on addressing any bugs that may arise. 
-
-**There are no current plans to migrate to or incorporate newer model architectures.** However, this may change during time with the development of open-source community. For example, if the community converge to one single dominant method for image generation (which may really happen in half or one years given the current status), Fooocus may also migrate to that exact method.
-
-For those interested in utilizing newer models such as **Flux**, we recommend exploring alternative platforms such as [WebUI Forge](https://github.com/lllyasviel/stable-diffusion-webui-forge) (also from us), [ComfyUI/SwarmUI](https://github.com/comfyanonymous/ComfyUI). Additionally, several [excellent forks of Fooocus](https://github.com/lllyasviel/Fooocus?tab=readme-ov-file#forks) are available for experimentation.
-
-Again, recently many fake websites exist on Google when you search “fooocus”. Do **NOT** get Fooocus from those websites – this page is the only official source of Fooocus. We never have any website like such as “fooocus.com”, “fooocus.net”, “fooocus.co”, “fooocus.ai”, “fooocus.org”, “fooocus.pro”, “fooocus.one”. Those websites are ALL FAKE. **They have ABSOLUTLY no relationship to us. Fooocus is a 100% non-commercial offline open-source software.**
+- **Dual-Architecture Backbone**:
+  - **SDXL Pipeline (UNet)**: Preserves complete, flawless SDXL compatibility (CLIP-L + OpenCLIP BigG, 4-channel latent, standard SDXL VAE, refiners, and Fooocus V2 expansion).
+  - **Anima Pipeline (DiT - Diffusion Transformer)**: Full integration of the 28-block DiT architecture (`MiniTrainDIT` / `CosmosTransformer`), Qwen3-0.6B text conditioning with Danbooru tag padding (512 token attention sink), and Wan21 16-channel 3D VAE (`WanVAE`).
+- **ComfyUI Reference Sampler Bootstrap**:
+  - Direct execution via ComfyUI reference sampler (`euler_ancestral` + `simple`, shift 3.0, multiplier 1.0) with custom LoRA support and in-memory caching (`_anima_lora_cache`).
+- **Memory & VRAM Optimizations for Colab (Tesla T4 16GB)**:
+  - **Weight Unification**: Merges identical DiT model weights on GPU, returning **~4.5 GB VRAM** instantly.
+  - **Sequential CFG Batching (`batch=1`)**: Evaluates positive and negative conditionings sequentially, slashing RoPE activation peaks by **~50%** and enabling **High-Res Upscale (1.5x / 2.0x)** without memory freeze or CUDA OOM.
+  - **Zero CPU Offloading**: Eliminates DiT RAM offloading, completely avoiding Linux OOM Killer terminations.
+- **Zero-VRAM Live Step Preview for Anima**:
+  - Instant live preview during DiT sampling steps using CPU-based linear Wan21 RGB latent projection.
+- **Fast Startup & Colab Auto-Bypass**:
+  - Pre-built binary wheel integration for `numpy-1.26.4` on Python 3.13, skipping 7-minute Meson/Ninja compilations.
+  - CLI flag `--skip-pip` (or `SKIP_PIP=1`) to skip package dependency loops on warm runtimes.
+  - Automated Civitai token authentication (`CIVITAI_API_TOKEN` / `CIVITAI_TOKEN`).
+  - Network dependency locking (`starlette==0.37.2`, `fastapi==0.112.2`) ensuring unbroken Gradio websocket connectivity.
 
 # Features
 
@@ -109,19 +118,28 @@ See also the common problems and troubleshoots [here](troubleshoot.md).
 
 ### Colab (Modern Runtime Support - SayMaven Fork)
 
-This fork is actively maintained on branch `colab-support` for Google Colab's modern runtime (Python 3.13+, CUDA 12.8+, Transformers 5.x, PyTorch 2.11+).
+This fork is actively maintained on branch `anima-support` (Dual-Architecture: SDXL + Anima DiT) and `colab-support` (Stable SDXL) for Google Colab's modern runtime (Python 3.13+, CUDA 12.8+, Transformers 5.x, PyTorch 2.x).
 
-**Quick Start in Google Colab:**
+**Quick Start in Google Colab (Anima DiT & SDXL Dual-Architecture):**
 ```bash
 %cd /content
-!if [ ! -d "Fooocus" ]; then git clone -b colab-support https://github.com/SayMaven/Fooocus.git; fi
+!if [ ! -d "Fooocus" ]; then git clone -b anima-support https://github.com/SayMaven/Fooocus.git; fi
 %cd /content/Fooocus
-!python entry_with_update.py --share --always-high-vram --port 7866
+!python entry_with_update.py --share --always-high-vram --preset anima --skip-pip --port 7866
 ```
 
-In Colab, you can also modify the last line to `!python entry_with_update.py --share --always-high-vram --preset anime` or `!python entry_with_update.py --share --always-high-vram --preset realistic` for different presets.
+**Quick Start for Standard SDXL:**
+```bash
+%cd /content
+!if [ ! -d "Fooocus" ]; then git clone -b anima-support https://github.com/SayMaven/Fooocus.git; fi
+%cd /content/Fooocus
+!python entry_with_update.py --share --always-high-vram --skip-pip --port 7866
+```
 
-Using `--always-high-vram` shifts resource allocation from RAM to VRAM and achieves the overall best balance between performance, flexibility and stability on the default T4 instance.
+*Tips:*
+- Using `--always-high-vram` shifts resource allocation from RAM to VRAM and achieves the overall best balance between performance, flexibility, and stability on the default Tesla T4 instance.
+- Using `--skip-pip` bypasses package dependency re-checks during subsequent launches, cutting startup time down to seconds.
+- You can switch presets anytime with `--preset anima`, `--preset anime`, `--preset realistic`, etc.
 
 ### Linux (Using Anaconda)
 
@@ -275,9 +293,12 @@ Given different goals, the default models and configs of Fooocus are different:
 
 | Task      | Windows | Linux args | Main Model                  | Refiner | Config                                                                         |
 |-----------| --- | --- |-----------------------------| --- |--------------------------------------------------------------------------------|
-| General   | run.bat |  | juggernautXL_v8Rundiffusion | not used | [here](https://github.com/lllyasviel/Fooocus/blob/main/presets/default.json)   |
-| Realistic | run_realistic.bat | --preset realistic | realisticStockPhoto_v20     | not used | [here](https://github.com/lllyasviel/Fooocus/blob/main/presets/realistic.json) |
-| Anime     | run_anime.bat | --preset anime | animaPencilXL_v500          | not used | [here](https://github.com/lllyasviel/Fooocus/blob/main/presets/anime.json)     |
+| General (SDXL)   | run.bat |  | juggernautXL_v8Rundiffusion | not used | [here](presets/default.json)   |
+| Realistic (SDXL) | run_realistic.bat | --preset realistic | realisticStockPhoto_v20     | not used | [here](presets/realistic.json) |
+| Anime (SDXL)     | run_anime.bat | --preset anime | animaPencilXL_v500          | not used | [here](presets/anime.json)     |
+| Anima (DiT)      | run_anima.bat | --preset anima | Ob_animaV4                  | not used | [here](presets/anima.json)     |
+| Anima Base (DiT) | | --preset anima_base_v1 | anima-base-v1.0             | not used | [here](presets/anima_base_v1.json) |
+| Hassaku Anima (DiT) | | --preset hassaku_anima_v01 | hassakuAnima_v01            | not used | [here](presets/hassaku_anima_v01.json) |
 
 Note that the download is **automatic** - you do not need to do anything if the internet connection is okay. However, you can download them manually if you (or move them from somewhere else) have your own preparation.
 
@@ -389,6 +410,7 @@ entry_with_update.py  [-h] [--listen [IP]] [--port PORT]
                       [--disable-enhance-output-sorting]
                       [--enable-auto-describe-image]
                       [--always-download-new-model]
+                      [--skip-pip]
                       [--rebuild-hash-cache [CPU_NUM_THREADS]]
 ```
 
