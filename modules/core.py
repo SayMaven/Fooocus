@@ -195,6 +195,37 @@ _COMFY_AIMDO_STUBS = {
         'def vbars_reset_watermark_limits():\n'
         '    return None\n'
     ),
+    "malloc_graph.py": (
+        '"""Malloc graph stub used when AIMDO is unavailable."""\n\n\n'
+        'class _MallocGraph:\n'
+        '    def __init__(self):\n'
+        '        self.rogue_count = 0\n'
+        '        self._comfy_active = False\n'
+        '        self._comfy_cuda_graph_modules = set()\n'
+        '    def push(self):\n'
+        '        pass\n'
+        '    def pop(self):\n'
+        '        return False\n'
+        '    def pause(self, sync=False):\n'
+        '        pass\n'
+        '    def resume(self, sync=False):\n'
+        '        pass\n'
+        '    def abort(self):\n'
+        '        pass\n\n\n'
+        'def record(stream=None, assert_graph_breaks=False):\n'
+        '    return _MallocGraph()\n'
+    ),
+    "control.py": (
+        '"""Control stubs for optional AIMDO integrations."""\n\n\n'
+        'def init(*args, **kwargs):\n'
+        '    return None\n'
+    ),
+    "model_mmap.py": (
+        '"""Model mmap stub used when AIMDO is unavailable."""\n\n\n'
+        'class ModelMmap:\n'
+        '    def __init__(self, *args, **kwargs):\n'
+        '        pass\n'
+    ),
     "storage.py": (
         '"""Storage stubs for optional AIMDO integrations."""\n\n\n'
         'def fast_disk(_path):\n'
@@ -218,12 +249,109 @@ _COMFY_AIMDO_STUBS = {
 }
 
 
+class _AimdoLoader:
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module):
+        fullname = module.__name__
+        if fullname == "comfy_aimdo":
+            module.__path__ = []
+            module.__package__ = "comfy_aimdo"
+            return
+
+        sub = fullname.split(".", 1)[1] if "." in fullname else ""
+        if sub == "malloc_graph":
+            class _MallocGraph:
+                def __init__(self):
+                    self.rogue_count = 0
+                    self._comfy_active = False
+                    self._comfy_cuda_graph_modules = set()
+                def push(self): pass
+                def pop(self): return False
+                def pause(self, sync=False): pass
+                def resume(self, sync=False): pass
+                def abort(self): pass
+
+            module.record = lambda stream=None, assert_graph_breaks=False: _MallocGraph()
+        elif sub == "host_buffer":
+            class HostBuffer:
+                def __init__(self, size):
+                    self.size = int(size)
+            module.HostBuffer = HostBuffer
+        elif sub == "vram_buffer":
+            class VRAMBuffer:
+                def __init__(self, size, device_index=None):
+                    self.size = int(size)
+                    self.device_index = device_index
+            module.VRAMBuffer = VRAMBuffer
+        elif sub == "model_vbar":
+            class ModelVBAR:
+                def __init__(self, size, device_index=None):
+                    self.size = int(size)
+                    self.device_index = device_index
+                def loaded_size(self): return 0
+                def prioritize(self): return None
+            module.ModelVBAR = ModelVBAR
+            module.vbar_fault = lambda _v: None
+            module.vbar_signature_compare = lambda _s, _o: True
+            module.vbar_unpin = lambda _v: None
+            module.vbars_analyze = lambda: 0
+            module.vbars_reset_watermark_limits = lambda: None
+        elif sub == "storage":
+            module.fast_disk = lambda _p: None
+        elif sub == "control":
+            module.init = lambda *a, **k: None
+        elif sub == "model_mmap":
+            class ModelMmap:
+                def __init__(self, *a, **k): pass
+            module.ModelMmap = ModelMmap
+        elif sub == "torch":
+            module.aimdo_to_tensor = lambda _v, device: torch.empty(0, device=device)
+            module.hostbuf_to_tensor = lambda h: torch.empty(h.size, dtype=torch.uint8)
+
+
+class _AimdoFinder:
+    def find_spec(self, fullname, path, target=None):
+        if fullname == "comfy_aimdo" or fullname.startswith("comfy_aimdo."):
+            from importlib.machinery import ModuleSpec
+            return ModuleSpec(fullname, _AimdoLoader(), is_package=(fullname == "comfy_aimdo"))
+        return None
+
+
 def _register_aimdo_in_memory():
     import types
+    if not any(isinstance(f, _AimdoFinder) for f in sys.meta_path):
+        sys.meta_path.insert(0, _AimdoFinder())
+
     if "comfy_aimdo" not in sys.modules:
         m = types.ModuleType("comfy_aimdo")
+        m.__path__ = []
+        m.__package__ = "comfy_aimdo"
         sys.modules["comfy_aimdo"] = m
-    m = sys.modules["comfy_aimdo"]
+    else:
+        m = sys.modules["comfy_aimdo"]
+        if not hasattr(m, "__path__") or not isinstance(m.__path__, list):
+            m.__path__ = []
+        if not hasattr(m, "__package__"):
+            m.__package__ = "comfy_aimdo"
+
+    if "comfy_aimdo.malloc_graph" not in sys.modules:
+        mg = types.ModuleType("comfy_aimdo.malloc_graph")
+        class _MallocGraph:
+            def __init__(self):
+                self.rogue_count = 0
+                self._comfy_active = False
+                self._comfy_cuda_graph_modules = set()
+            def push(self): pass
+            def pop(self): return False
+            def pause(self, sync=False): pass
+            def resume(self, sync=False): pass
+            def abort(self): pass
+
+        mg.record = lambda stream=None, assert_graph_breaks=False: _MallocGraph()
+        m.malloc_graph = mg
+        sys.modules["comfy_aimdo.malloc_graph"] = mg
 
     if "comfy_aimdo.storage" not in sys.modules:
         s = types.ModuleType("comfy_aimdo.storage")
@@ -274,6 +402,20 @@ def _register_aimdo_in_memory():
         m.torch = ct
         sys.modules["comfy_aimdo.torch"] = ct
 
+    if "comfy_aimdo.control" not in sys.modules:
+        ctrl = types.ModuleType("comfy_aimdo.control")
+        ctrl.init = lambda *a, **k: None
+        m.control = ctrl
+        sys.modules["comfy_aimdo.control"] = ctrl
+
+    if "comfy_aimdo.model_mmap" not in sys.modules:
+        mm = types.ModuleType("comfy_aimdo.model_mmap")
+        class ModelMmap:
+            def __init__(self, *a, **k): pass
+        mm.ModelMmap = ModelMmap
+        m.model_mmap = mm
+        sys.modules["comfy_aimdo.model_mmap"] = mm
+
     # Ensure broken comfy_kitchen in-memory stub is not present so ComfyUI uses its native safe fallback via ImportError
     if "comfy_kitchen" in sys.modules:
         ck = sys.modules.get("comfy_kitchen")
@@ -300,9 +442,13 @@ def _ensure_aimdo_stubs_on_disk(comfy_root):
     os.makedirs(stub_dir, exist_ok=True)
     for name, body in _COMFY_AIMDO_STUBS.items():
         target = os.path.join(stub_dir, name)
-        if not os.path.exists(target):
+        if not os.path.exists(target) or os.path.getsize(target) == 0:
             with open(target, "w", encoding="utf-8") as f:
                 f.write(body)
+    m = sys.modules.get("comfy_aimdo")
+    if m is not None and hasattr(m, "__path__") and isinstance(m.__path__, list):
+        if stub_dir not in m.__path__:
+            m.__path__.append(stub_dir)
 
 
 def _bootstrap_anima_comfy_reference(comfy_root):
