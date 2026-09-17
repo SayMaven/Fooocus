@@ -3,13 +3,15 @@ import threading
 from extras.inpaint_mask import generate_mask_from_image, SAMOptions
 from modules.patch import PatchSettings, patch_settings, patch_all
 import modules.config
+import modules.flags as flags
 
 patch_all()
 
 
 class AsyncTask:
     def __init__(self, args):
-        from modules.flags import Performance, MetadataScheme, ip_list, disabled
+        import modules.flags as flags
+        from modules.flags import Performance, MetadataScheme, ip_list, ip_list_anima, disabled
         from modules.util import get_enabled_loras
         from modules.config import default_max_lora_number
         import args_manager
@@ -101,7 +103,7 @@ class AsyncTask:
         self.metadata_scheme = MetadataScheme(
             args.pop()) if not args_manager.args.disable_metadata else MetadataScheme.FOOOCUS
 
-        all_ip_types = list(set(ip_list + getattr(flags, 'ip_list_anima', [])))
+        all_ip_types = list(set(ip_list + flags.ip_list_anima))
         self.cn_tasks = {x: [] for x in all_ip_types}
         for _ in range(modules.config.default_controlnet_image_count):
             cn_img = args.pop()
@@ -287,7 +289,7 @@ def worker():
         if async_task.last_stop is not False:
             ldm_patched.modules.model_management.interrupt_current_processing()
         if 'cn' in goals:
-            is_anima = ('anima' in str(async_task.base_model_name).lower()) or core.is_anima_model(pipeline.final_unet)
+            is_anima = core.is_anima_model(async_task.base_model_name) or core.is_anima_model(pipeline.final_unet)
             if not is_anima:
                 for cn_flag, cn_path in [
                     (flags.cn_canny, controlnet_canny_path),
@@ -399,7 +401,7 @@ def worker():
         return img_paths
 
     def apply_control_nets(async_task, height, ip_adapter_face_path, ip_adapter_path, width, current_progress):
-        is_anima = ('anima' in str(async_task.base_model_name).lower()) or core.is_anima_model(pipeline.final_unet)
+        is_anima = core.is_anima_model(async_task.base_model_name) or core.is_anima_model(pipeline.final_unet)
         if is_anima:
             lllite_prepared = []
             lllite_model_path = getattr(async_task, 'controlnet_lllite_path', None)
@@ -447,6 +449,10 @@ def worker():
                 pipeline.anima_lllite_tasks = lllite_prepared
                 if hasattr(pipeline, 'final_unet') and pipeline.final_unet is not None:
                     pipeline.final_unet.lllite_tasks = lllite_prepared
+            else:
+                pipeline.anima_lllite_tasks = None
+                if hasattr(pipeline, 'final_unet') and pipeline.final_unet is not None:
+                    pipeline.final_unet.lllite_tasks = None
             return
 
         for task in async_task.cn_tasks[flags.cn_canny]:
