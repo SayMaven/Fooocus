@@ -29,6 +29,14 @@ This repository is an active fork extending Fooocus with **Dual-Architecture Sup
   - WebUI dropdown selector in the *Upscale or Variation* and *Enhance* tabs supporting any custom super-resolution model (`RealESRGAN_x4Plus_Anime_6B`, `4x-UltraSharp`, `Remacri`, etc.) placed in `models/upscale_models/`.
   - Smart download prevention: Eliminates redundant Hugging Face downloads when custom models are chosen.
   - Magic-byte verification in model loader to automatically detect PyTorch `.pt`/`.pth` archives even if mistakenly named `.safetensors`.
+- **Anima ControlNet-LLLite Integration**:
+  - Seamless structural, lineart, and pose conditioning for DiT models via **ControlNet-LLLite** (Low-Rank Light Adaptation ControlNet) directly in the *Image Prompt* tab.
+  - Lightweight model footprint (~52 MB) with automatic lazy downloading (`any-test-like-v2.safetensors` from `kohyass/anima-pencil-xl-controlnet-lllite`).
+  - Calibrated default parameters (`strength: 0.2`, `stop_at: 0.4`) tuned to preserve crisp outlines and structural control without over-saturation across both base diffusion and high-res upscale passes.
+  - Dynamic WebUI switching: automatically restricts Image Prompt methods to `["Anima-LLLite"]` for Anima models while preserving the full suite (`ImagePrompt`, `FaceSwap`, `PyraCanny`, `CPDS`) for SDXL models.
+- **Enhanced 3-Stage Gallery Zoom Viewer**:
+  - Intuitive 3-stage inspection flow: **Grid Thumbnails** $\rightarrow$ **Canvas Focused View** $\rightarrow$ **Fullscreen Lightbox Modal**.
+  - Centered fullscreen lightbox with keyboard arrow navigation (`ArrowLeft` / `ArrowRight`) and quick escape (`Esc`), eliminating UI cut-offs when previewing high-resolution generations.
 - **Fast Startup & Colab Auto-Bypass**:
   - Pre-built binary wheel integration for `numpy-1.26.4` on Python 3.13, skipping 7-minute Meson/Ninja compilations.
   - CLI flag `--skip-pip` (or `SKIP_PIP=1`) to skip package dependency loops on warm runtimes.
@@ -301,6 +309,7 @@ Given different goals, the default models and configs of Fooocus are different:
 | Anima (DiT)      | run_anima.bat | --preset anima | Ob_animaV4                  | not used | [here](presets/anima.json)     |
 | Anima Base (DiT) | | --preset anima_base_v1 | anima-base-v1.0             | not used | [here](presets/anima_base_v1.json) |
 | Hassaku Anima (DiT) | | --preset hassaku_anima_v01 | hassakuAnima_v01            | not used | [here](presets/hassaku_anima_v01.json) |
+| Wai Anima (DiT)  | | --preset wai_anima         | waiANIMA_v10Base10          | not used | [here](presets/wai_anima.json) |
 
 Note that the download is **automatic** - you do not need to do anything if the internet connection is okay. However, you can download them manually if you (or move them from somewhere else) have your own preparation.
 
@@ -363,6 +372,30 @@ Fooocus allows you to use custom super-resolution models (such as `RealESRGAN_x4
 - **Multi-Scale Compatibility**: Even if a custom model has a fixed scale (e.g., 4x), Fooocus automatically upscales and precisely resamples the image to your requested scaling target (`Upscale (Fast 2x)`, `Upscale (1.5x)`, or `Upscale (2x)`), followed by the high-resolution diffusion refinement pass.
 - **Magic Header Detection**: If a PyTorch `.pt` or `.pth` model was saved with a `.safetensors` extension, Fooocus automatically inspects the first 8 magic bytes and safely routes it to `torch.load` to avoid `SafetensorError: header too large` crashes.
 
+## 🎨 Anima ControlNet-LLLite (Structure & Pose Conditioning)
+
+Unlike SDXL models that rely on heavy UNet ControlNets or IP-Adapters, the Anima DiT architecture uses **ControlNet-LLLite** (developed by Kohya-ss) for structural guidance:
+
+### Key Highlights:
+- **Ultra-Lightweight**: Models are only ~52 MB (compared to 1.4–2.5 GB for traditional ControlNets), loading in milliseconds with negligible VRAM overhead.
+- **How to Use**:
+  1. Check **Input Image** -> **Image Prompt**.
+  2. Load your reference pose, lineart, or sketch image.
+  3. Select **Anima-LLLite** (automatically selected when using Anima presets).
+  4. Fooocus will automatically download the default `any-test-like-v2.safetensors` model on first use.
+- **Optimized Defaults**: Default parameters are calibrated to **`Stop At: 0.4`** and **`Weight: 0.2`**. This prevents over-saturation or burned colors when combined with Upscale (1.5x / 2.0x), where LLLite operates on both generation and upscale refinement passes.
+- **Custom LLLite Models**: You can drop additional Anima LLLite models into `models/controlnet/` or `models/prompt_expansion/controlnet/`.
+
+## 🖼️ 3-Stage Gallery Zoom & Lightbox Viewer
+
+Fooocus includes a fluid 3-stage image viewing workflow designed for evaluating generated outputs at any zoom level:
+
+1. **Stage 1 — Grid Thumbnails**: View all generated batch outputs side-by-side in a responsive grid. Clicking any thumbnail seamlessly switches the gallery to that image in the canvas view.
+2. **Stage 2 — Canvas Detailed View**: Inspect the image fitted comfortably within the WebUI workspace while retaining immediate access to generation settings, seeds, and metadata.
+3. **Stage 3 — Fullscreen Lightbox Modal**: Click the canvas image to open the centered fullscreen lightbox overlay.
+   - **Keyboard Navigation**: Press `ArrowLeft` / `ArrowRight` to cycle through your generation history without closing the viewer.
+   - **Quick Close**: Press `Esc`, click the dark background, or click `(X)` to exit back to the canvas view.
+
 ## UI Access and Authentication
 In addition to running on localhost, Fooocus can also expose its UI in two ways: 
 * Local UI listener: use `--listen` (specify port e.g. with `--port 8888`). 
@@ -385,6 +418,8 @@ In both ways the access is unauthenticated by default. You can add basic authent
 7. **Dual-Path VAE Decode**: Specialized handling for both 4-channel 2D KL-Autoencoder and 16-channel 3D Causal WanVAE.
 8. **Sequential CFG Batching**: Sequential positive/unconditioned passes preventing high-resolution activation spikes.
 9. **Zero-VRAM Step Preview**: Instant linear RGB latent projection preview for DiT latents.
+10. **DiT ControlNet-LLLite Injection**: Low-rank linear adapters and ASPP conditioning extractor for DiT models.
+11. **3-Stage Image Inspection**: Gradio gallery pass-through to canvas view with centered fullscreen lightbox modal.
 </details>
 
 ## Customization

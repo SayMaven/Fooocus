@@ -1,16 +1,22 @@
-// From A1111
+// From A1111 / Fooocus Lightbox Modal
 
 function closeModal() {
-    gradioApp().getElementById("lightboxModal").style.display = "none";
+    const lb = gradioApp().getElementById("lightboxModal");
+    if (lb) lb.style.display = "none";
 }
 
 function showModal(event) {
     const source = event.target || event.srcElement;
     const modalImage = gradioApp().getElementById("modalImage");
     const lb = gradioApp().getElementById("lightboxModal");
-    modalImage.src = source.src;
+    if (!modalImage || !lb) return;
+
+    const imgSrc = source.src || source.querySelector('img')?.src;
+    if (!imgSrc) return;
+
+    modalImage.src = imgSrc;
     if (modalImage.style.display === 'none') {
-        lb.style.setProperty('background-image', 'url(' + source.src + ')');
+        lb.style.setProperty('background-image', 'url(' + imgSrc + ')');
     }
     lb.style.display = "flex";
     lb.focus();
@@ -26,9 +32,10 @@ function updateOnBackgroundChange() {
     const modalImage = gradioApp().getElementById("modalImage");
     if (modalImage && modalImage.offsetParent) {
         let currentButton = selected_gallery_button();
+        let currentImg = currentButton?.querySelector('img') || currentButton?.children?.[0];
 
-        if (currentButton?.children?.length > 0 && modalImage.src != currentButton.children[0].src) {
-            modalImage.src = currentButton.children[0].src;
+        if (currentImg && currentImg.src && modalImage.src != currentImg.src) {
+            modalImage.src = currentImg.src;
             if (modalImage.style.display === 'none') {
                 const modal = gradioApp().getElementById("lightboxModal");
                 modal.style.setProperty('background-image', `url(${modalImage.src})`);
@@ -38,10 +45,10 @@ function updateOnBackgroundChange() {
 }
 
 function all_gallery_buttons() {
-    var allGalleryButtons = gradioApp().querySelectorAll('.image_gallery .thumbnails > .thumbnail-item.thumbnail-small');
+    var allGalleryButtons = gradioApp().querySelectorAll('#final_gallery .grid-container button, #final_gallery button, .image_gallery .thumbnails > .thumbnail-item, .image_gallery button');
     var visibleGalleryButtons = [];
     allGalleryButtons.forEach(function(elem) {
-        if (elem.parentElement.offsetParent) {
+        if ((elem.offsetParent || elem.parentElement?.offsetParent) && (elem.querySelector('img') || elem.tagName === 'IMG')) {
             visibleGalleryButtons.push(elem);
         }
     });
@@ -49,7 +56,8 @@ function all_gallery_buttons() {
 }
 
 function selected_gallery_button() {
-    return all_gallery_buttons().find(elem => elem.classList.contains('selected')) ?? null;
+    var buttons = all_gallery_buttons();
+    return buttons.find(elem => elem.classList.contains('selected')) || buttons[0] || null;
 }
 
 function selected_gallery_index() {
@@ -74,13 +82,18 @@ function modalImageSwitch(offset) {
             nextButton.click();
             const modalImage = gradioApp().getElementById("modalImage");
             const modal = gradioApp().getElementById("lightboxModal");
-            modalImage.src = nextButton.children[0].src;
-            if (modalImage.style.display === 'none') {
-                modal.style.setProperty('background-image', `url(${modalImage.src})`);
+            const nextImg = nextButton.querySelector('img') || (nextButton.tagName === 'IMG' ? nextButton : nextButton.children?.[0]);
+            if (nextImg && nextImg.src && modalImage) {
+                modalImage.src = nextImg.src;
+                if (modalImage.style.display === 'none' && modal) {
+                    modal.style.setProperty('background-image', `url(${modalImage.src})`);
+                }
             }
-            setTimeout(function() {
-                modal.focus();
-            }, 10);
+            if (modal) {
+                setTimeout(function() {
+                    modal.focus();
+                }, 10);
+            }
         }
     }
 }
@@ -126,17 +139,19 @@ function setupImageForLightbox(e) {
     }
 
     e.dataset.modded = true;
-    e.style.cursor = 'pointer';
-    e.style.userSelect = 'none';
 
     var isFirefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
 
     // For Firefox, listening on click first switched to next image then shows the lightbox.
-    // If you know how to fix this without switching to mousedown event, please.
-    // For other browsers the event is click to make it possiblr to drag picture.
     var event = isFirefox ? 'mousedown' : 'click';
 
     e.addEventListener(event, function(evt) {
+        // Stage 1 check: If click was on a thumbnail inside the grid, do NOT intercept!
+        // Allow Gradio's native handler to expand the thumbnail full onto the canvas first (Stage 1 -> Stage 2)
+        if (evt.target.closest('.grid-container') || evt.target.closest('.thumbnail-item') || evt.target.closest('.grid-wrap')) {
+            return;
+        }
+
         if (evt.button == 1) {
             open(evt.target.src);
             evt.preventDefault();
@@ -144,6 +159,8 @@ function setupImageForLightbox(e) {
         }
         if (evt.button != 0) return;
 
+        // Stage 2 -> Stage 3: When clicking the image that is already full on the canvas,
+        // open the full-screen centered Lightbox Modal!
         modalZoomSet(gradioApp().getElementById('modalImage'), true);
         evt.preventDefault();
         showModal(evt);
@@ -177,15 +194,22 @@ function modalTileImageToggle(event) {
 }
 
 onAfterUiUpdate(function() {
-    var fullImg_preview = gradioApp().querySelectorAll('.image_gallery > div > img');
+    var fullImg_preview = gradioApp().querySelectorAll('#final_gallery img, .image_gallery img, #progress_gallery img');
     if (fullImg_preview != null) {
-        fullImg_preview.forEach(setupImageForLightbox);
+        fullImg_preview.forEach(function(img) {
+            setupImageForLightbox(img);
+            // Give pointer cursor to the expanded canvas preview (Stage 2)
+            if (!img.closest('.grid-container') && !img.closest('.thumbnail-item') && !img.closest('.grid-wrap')) {
+                img.style.cursor = 'pointer';
+            }
+        });
     }
     updateOnBackgroundChange();
 });
 
-document.addEventListener("DOMContentLoaded", function() {
-    //const modalFragment = document.createDocumentFragment();
+function initModal() {
+    if (document.getElementById("lightboxModal")) return;
+
     const modal = document.createElement('div');
     modal.onclick = closeModal;
     modal.id = "lightboxModal";
@@ -202,21 +226,6 @@ document.addEventListener("DOMContentLoaded", function() {
     modalZoom.addEventListener('click', modalZoomToggle, true);
     modalZoom.title = "Toggle zoomed view";
     modalControls.appendChild(modalZoom);
-
-    // const modalTileImage = document.createElement('span');
-    // modalTileImage.className = 'modalTileImage cursor';
-    // modalTileImage.innerHTML = '&#8862;';
-    // modalTileImage.addEventListener('click', modalTileImageToggle, true);
-    // modalTileImage.title = "Preview tiling";
-    // modalControls.appendChild(modalTileImage);
-    //
-    // const modalSave = document.createElement("span");
-    // modalSave.className = "modalSave cursor";
-    // modalSave.id = "modal_save";
-    // modalSave.innerHTML = "&#x1F5AB;";
-    // modalSave.addEventListener("click", modalSaveImage, true);
-    // modalSave.title = "Save Image(s)";
-    // modalControls.appendChild(modalSave);
 
     const modalClose = document.createElement('span');
     modalClose.className = 'modalClose cursor';
@@ -256,5 +265,14 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     document.body.appendChild(modal);
+}
 
-});
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initModal);
+} else {
+    initModal();
+}
+
+if (typeof onUiLoaded === "function") {
+    onUiLoaded(initModal);
+}

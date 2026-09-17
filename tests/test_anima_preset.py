@@ -125,7 +125,7 @@ class TestAnimaPreset(unittest.TestCase):
         self.assertEqual(flags.cn_anima_lllite, "Anima-LLLite")
         self.assertIn(flags.cn_anima_lllite, flags.ip_list_anima)
         self.assertIn(flags.cn_anima_lllite, flags.default_parameters)
-        self.assertEqual(flags.default_parameters[flags.cn_anima_lllite], (0.35, 0.3))
+        self.assertEqual(flags.default_parameters[flags.cn_anima_lllite], (0.4, 0.2))
 
 
 if __name__ == '__main__':
