@@ -249,7 +249,7 @@ with shared.gradio_root:
                                             ip_weights.append(ip_weight)
                                             ip_ctrls.append(ip_weight)
 
-                                        is_anima_init = 'anima' in str(modules.config.default_base_model_name).lower()
+                                        is_anima_init = core.is_anima_model(modules.config.default_base_model_name)
                                         init_ip_choices = flags.ip_list_anima if is_anima_init else flags.ip_list
                                         init_default_ip = flags.default_ip_anima if is_anima_init else flags.default_ip
                                         ip_type = gr.Radio(label='Type', choices=init_ip_choices, value=init_default_ip, container=False)
@@ -267,7 +267,7 @@ with shared.gradio_root:
                         ip_desc = gr.HTML(ip_desc_html)
 
                         def ip_advance_checked(x):
-                            is_anima = 'anima' in str(modules.config.default_base_model_name).lower()
+                            is_anima = core.is_anima_model(modules.config.default_base_model_name)
                             def_ip = flags.default_ip_anima if is_anima else flags.default_ip
                             choices = flags.ip_list_anima if is_anima else flags.ip_list
                             return [gr.update(visible=x)] * len(ip_ad_cols) + \
@@ -710,7 +710,7 @@ with shared.gradio_root:
                                          inputs=refiner_model, outputs=refiner_switch, show_progress=False, queue=False)
 
                     def base_model_changed(model_name):
-                        is_anima = 'anima' in str(model_name).lower()
+                        is_anima = core.is_anima_model(model_name)
                         choices = flags.ip_list_anima if is_anima else flags.ip_list
                         val = flags.default_ip_anima if is_anima else flags.default_ip
                         stop_val = flags.default_parameters[val][0]
