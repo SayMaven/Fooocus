@@ -83,7 +83,7 @@ default_ip_anima = cn_anima_lllite
 
 default_parameters = {
     cn_ip: (0.5, 0.6), cn_ip_face: (0.9, 0.75), cn_canny: (0.5, 1.0), cn_cpds: (0.5, 1.0),
-    cn_anima_lllite: (0.3, 0.25)
+    cn_anima_lllite: (0.35, 0.3)
 }  # stop, weight
 
 output_formats = ['png', 'jpeg', 'webp']
