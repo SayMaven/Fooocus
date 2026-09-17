@@ -73,3 +73,61 @@ def load_file_from_url(
                 ) from e
             raise
     return cached_file
+
+
+_is_anima_checkpoint_cache = {}
+
+
+def is_anima_checkpoint_file(filename_or_path: Optional[str]) -> bool:
+    if not filename_or_path or not isinstance(filename_or_path, str):
+        return False
+    fn_lower = filename_or_path.lower()
+    if "anima" in fn_lower:
+        return True
+
+    if filename_or_path in _is_anima_checkpoint_cache:
+        return _is_anima_checkpoint_cache[filename_or_path]
+
+    full_path = filename_or_path
+    if not os.path.isfile(full_path):
+        try:
+            import modules.default_pipeline as _dp
+            import modules.config as _cfg
+            full_path = _dp.get_file_from_folder_list(filename_or_path, _cfg.paths_checkpoints)
+        except Exception:
+            pass
+
+    if full_path and os.path.isfile(full_path) and full_path.endswith('.safetensors'):
+        try:
+            from safetensors import safe_open
+            with safe_open(full_path, framework="pt", device="cpu") as f:
+                keys = f.keys()
+                is_anima = any("llm_adapter" in k or "x_embedder" in k for k in keys)
+                _is_anima_checkpoint_cache[filename_or_path] = is_anima
+                _is_anima_checkpoint_cache[full_path] = is_anima
+                return is_anima
+        except Exception:
+            pass
+
+    _is_anima_checkpoint_cache[filename_or_path] = False
+    return False
+
+
+def is_anima_model(model) -> bool:
+    if model is None:
+        return False
+    if isinstance(model, str):
+        return is_anima_checkpoint_file(model)
+    if hasattr(model, "model") and getattr(model.model, "__class__", None) and model.model.__class__.__name__ == "Anima":
+        return True
+    inner = getattr(model, "model", None)
+    if inner is not None:
+        if getattr(inner, "__class__", None) and inner.__class__.__name__ == "Anima":
+            return True
+        diff = getattr(inner, "diffusion_model", None)
+        if diff is not None and getattr(diff, "__class__", None) and diff.__class__.__name__ in ("MiniTrainDIT", "CosmosTransformer", "Anima"):
+            return True
+    filename = getattr(model, "model_file", None) or getattr(model, "filename", None)
+    if filename:
+        return is_anima_checkpoint_file(filename)
+    return False

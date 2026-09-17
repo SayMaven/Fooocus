@@ -83,7 +83,7 @@ class TestAnimaPreset(unittest.TestCase):
         self.assertEqual(preset['default_vae'], 'qwen_image_vae.safetensors')
         self.assertEqual(preset['default_sampler'], 'euler_ancestral')
         self.assertEqual(preset['default_scheduler'], 'simple')
-        self.assertEqual(preset['default_cfg_scale'], 4.5)
+        self.assertEqual(preset['default_cfg_scale'], 4.0)
 
     def test_anima_preset_lora_downloads(self):
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

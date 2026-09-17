@@ -23,6 +23,7 @@ from modules.private_logger import get_current_html_path
 from modules.ui_gradio_extensions import reload_javascript
 from modules.auth import auth_enabled, check_auth
 from modules.util import is_json
+from modules.model_loader import is_anima_model
 
 def get_task(*args):
     args = list(args)
@@ -249,7 +250,7 @@ with shared.gradio_root:
                                             ip_weights.append(ip_weight)
                                             ip_ctrls.append(ip_weight)
 
-                                        is_anima_init = core.is_anima_model(modules.config.default_base_model_name)
+                                        is_anima_init = is_anima_model(modules.config.default_base_model_name)
                                         init_ip_choices = flags.ip_list_anima if is_anima_init else flags.ip_list
                                         init_default_ip = flags.default_ip_anima if is_anima_init else flags.default_ip
                                         ip_type = gr.Radio(label='Type', choices=init_ip_choices, value=init_default_ip, container=False)
@@ -267,7 +268,7 @@ with shared.gradio_root:
                         ip_desc = gr.HTML(ip_desc_html)
 
                         def ip_advance_checked(x):
-                            is_anima = core.is_anima_model(modules.config.default_base_model_name)
+                            is_anima = is_anima_model(modules.config.default_base_model_name)
                             def_ip = flags.default_ip_anima if is_anima else flags.default_ip
                             choices = flags.ip_list_anima if is_anima else flags.ip_list
                             return [gr.update(visible=x)] * len(ip_ad_cols) + \
@@ -710,7 +711,7 @@ with shared.gradio_root:
                                          inputs=refiner_model, outputs=refiner_switch, show_progress=False, queue=False)
 
                     def base_model_changed(model_name):
-                        is_anima = core.is_anima_model(model_name)
+                        is_anima = is_anima_model(model_name)
                         choices = flags.ip_list_anima if is_anima else flags.ip_list
                         val = flags.default_ip_anima if is_anima else flags.default_ip
                         stop_val = flags.default_parameters[val][0]
