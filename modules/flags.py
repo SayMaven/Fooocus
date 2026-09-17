@@ -74,12 +74,16 @@ cn_ip = "ImagePrompt"
 cn_ip_face = "FaceSwap"
 cn_canny = "PyraCanny"
 cn_cpds = "CPDS"
+cn_anima_lllite = "Anima-LLLite"
 
 ip_list = [cn_ip, cn_canny, cn_cpds, cn_ip_face]
+ip_list_anima = [cn_anima_lllite]
 default_ip = cn_ip
+default_ip_anima = cn_anima_lllite
 
 default_parameters = {
-    cn_ip: (0.5, 0.6), cn_ip_face: (0.9, 0.75), cn_canny: (0.5, 1.0), cn_cpds: (0.5, 1.0)
+    cn_ip: (0.5, 0.6), cn_ip_face: (0.9, 0.75), cn_canny: (0.5, 1.0), cn_cpds: (0.5, 1.0),
+    cn_anima_lllite: (0.5, 0.8)
 }  # stop, weight
 
 output_formats = ['png', 'jpeg', 'webp']

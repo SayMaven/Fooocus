@@ -935,6 +935,15 @@ def downloading_controlnet_cpds():
     return os.path.join(path_controlnet, 'fooocus_xl_cpds_128.safetensors')
 
 
+def downloading_controlnet_anima_lllite():
+    load_file_from_url(
+        url='https://huggingface.co/kohya-ss/Anima-LLLite/resolve/main/anima-lllite-any-test-like-v2.safetensors',
+        model_dir=path_controlnet,
+        file_name='anima-lllite-any-test-like-v2.safetensors'
+    )
+    return os.path.join(path_controlnet, 'anima-lllite-any-test-like-v2.safetensors')
+
+
 def downloading_ip_adapters(v):
     assert v in ['ip', 'face']
 

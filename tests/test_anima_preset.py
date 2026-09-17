@@ -119,6 +119,14 @@ class TestAnimaPreset(unittest.TestCase):
         dit_config = {"image_model": "anima", "model_channels": 2048}
         self.assertFalse(DummyBase.matches(dit_config))
 
+    def test_anima_lllite_flags(self):
+        import modules.flags as flags
+
+        self.assertEqual(flags.cn_anima_lllite, "Anima-LLLite")
+        self.assertIn(flags.cn_anima_lllite, flags.ip_list_anima)
+        self.assertIn(flags.cn_anima_lllite, flags.default_parameters)
+        self.assertEqual(flags.default_parameters[flags.cn_anima_lllite], (0.5, 0.8))
+
 
 if __name__ == '__main__':
     unittest.main()

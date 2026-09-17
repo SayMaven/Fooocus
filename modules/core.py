@@ -166,6 +166,24 @@ def _is_anima_model_patcher(model):
     return hasattr(model, "model") and model.model.__class__.__name__ == "Anima"
 
 
+def is_anima_model(model):
+    if model is None:
+        return False
+    if _is_anima_model_patcher(model):
+        return True
+    inner = getattr(model, "model", None)
+    if inner is not None:
+        if inner.__class__.__name__ == "Anima":
+            return True
+        diff = getattr(inner, "diffusion_model", None)
+        if diff is not None and diff.__class__.__name__ in ("MiniTrainDIT", "CosmosTransformer", "Anima"):
+            return True
+    filename = getattr(model, "model_file", None) or getattr(model, "filename", None)
+    if filename and "anima" in str(filename).lower():
+        return True
+    return False
+
+
 _COMFY_AIMDO_STUBS = {
     "__init__.py": (
         '"""Lightweight stubs for optional ComfyUI AIMDO integrations.\n\n'
@@ -602,6 +620,37 @@ def _get_anima_reference_model(model):
                         print(f"[AnimaSampler] Applied LoRA to Comfy reference: {os.path.basename(lora_path)} (weight={weight})")
             except Exception as e:
                 print(f"[AnimaSampler] Failed to apply LoRA {lora_path}: {e}")
+
+    # Apply ControlNet-LLLite tasks if present
+    lllite_tasks = getattr(model, "lllite_tasks", None)
+    if lllite_tasks is None:
+        try:
+            import modules.default_pipeline as _dp
+            lllite_tasks = getattr(getattr(_dp.model_base, "unet_with_lora", None), "lllite_tasks", None)
+            if lllite_tasks is None:
+                lllite_tasks = getattr(_dp.model_base, "lllite_tasks", None)
+            if lllite_tasks is None:
+                lllite_tasks = getattr(_dp, "anima_lllite_tasks", None)
+        except Exception:
+            pass
+
+    if lllite_tasks:
+        import modules.anima_lllite as anima_lllite
+        for task in lllite_tasks:
+            try:
+                weights_path, img_tensor, weight, stop_at = task
+                if weights_path and os.path.isfile(weights_path) and img_tensor is not None:
+                    out_model = anima_lllite.apply_lllite_to_model(
+                        out_model,
+                        weights_path=weights_path,
+                        image=img_tensor,
+                        strength=float(weight),
+                        start_percent=0.0,
+                        end_percent=float(stop_at)
+                    )
+                    print(f"[AnimaSampler] Applied ControlNet-LLLite: {os.path.basename(weights_path)} (strength={weight}, stop_at={stop_at})")
+            except Exception as e:
+                print(f"[AnimaSampler] Failed to apply ControlNet-LLLite: {e}")
 
     # Force ComfyUI to evaluate CFG (positive & negative) sequentially with batch_size=1
     # on VRAM-constrained GPUs (<= 18 GB like Tesla T4), cutting peak DiT self-attention memory in half

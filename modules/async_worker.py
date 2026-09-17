@@ -101,13 +101,14 @@ class AsyncTask:
         self.metadata_scheme = MetadataScheme(
             args.pop()) if not args_manager.args.disable_metadata else MetadataScheme.FOOOCUS
 
-        self.cn_tasks = {x: [] for x in ip_list}
+        all_ip_types = list(set(ip_list + getattr(flags, 'ip_list_anima', [])))
+        self.cn_tasks = {x: [] for x in all_ip_types}
         for _ in range(modules.config.default_controlnet_image_count):
             cn_img = args.pop()
             cn_stop = args.pop()
             cn_weight = args.pop()
             cn_type = args.pop()
-            if cn_img is not None:
+            if cn_img is not None and cn_type in self.cn_tasks:
                 self.cn_tasks[cn_type].append([cn_img, cn_stop, cn_weight])
 
         self.debugging_dino = args.pop()
@@ -286,14 +287,16 @@ def worker():
         if async_task.last_stop is not False:
             ldm_patched.modules.model_management.interrupt_current_processing()
         if 'cn' in goals:
-            for cn_flag, cn_path in [
-                (flags.cn_canny, controlnet_canny_path),
-                (flags.cn_cpds, controlnet_cpds_path)
-            ]:
-                for cn_img, cn_stop, cn_weight in async_task.cn_tasks[cn_flag]:
-                    positive_cond, negative_cond = core.apply_controlnet(
-                        positive_cond, negative_cond,
-                        pipeline.loaded_ControlNets[cn_path], cn_img, cn_weight, 0, cn_stop)
+            is_anima = ('anima' in str(async_task.base_model_name).lower()) or core.is_anima_model(pipeline.final_unet)
+            if not is_anima:
+                for cn_flag, cn_path in [
+                    (flags.cn_canny, controlnet_canny_path),
+                    (flags.cn_cpds, controlnet_cpds_path)
+                ]:
+                    for cn_img, cn_stop, cn_weight in async_task.cn_tasks.get(cn_flag, []):
+                        positive_cond, negative_cond = core.apply_controlnet(
+                            positive_cond, negative_cond,
+                            pipeline.loaded_ControlNets[cn_path], cn_img, cn_weight, 0, cn_stop)
         imgs = pipeline.process_diffusion(
             positive_cond=positive_cond,
             negative_cond=negative_cond,
@@ -396,6 +399,56 @@ def worker():
         return img_paths
 
     def apply_control_nets(async_task, height, ip_adapter_face_path, ip_adapter_path, width, current_progress):
+        is_anima = ('anima' in str(async_task.base_model_name).lower()) or core.is_anima_model(pipeline.final_unet)
+        if is_anima:
+            lllite_prepared = []
+            lllite_model_path = getattr(async_task, 'controlnet_lllite_path', None)
+            if not lllite_model_path:
+                try:
+                    lllite_model_path = modules.config.downloading_controlnet_anima_lllite()
+                except Exception:
+                    lllite_model_path = None
+
+            # Process Canny tasks with Canny preprocessor
+            for task in async_task.cn_tasks.get(flags.cn_canny, []):
+                cn_img, cn_stop, cn_weight = task
+                cn_img = resize_image(HWC3(cn_img), width=width, height=height)
+                if not async_task.skipping_cn_preprocessor:
+                    cn_img = preprocessors.canny_pyramid(cn_img, async_task.canny_low_threshold,
+                                                         async_task.canny_high_threshold)
+                cn_img = HWC3(cn_img)
+                img_t = core.numpy_to_pytorch(cn_img)
+                task[0] = img_t
+                if lllite_model_path:
+                    lllite_prepared.append((lllite_model_path, img_t, cn_weight, cn_stop))
+                if async_task.debugging_cn_preprocessor:
+                    yield_result(async_task, cn_img, current_progress, async_task.black_out_nsfw, do_not_show_finished_images=True)
+
+            # Process CPDS, ImagePrompt, and Anima-LLLite tasks
+            other_flags = [flags.cn_cpds, flags.cn_ip, getattr(flags, 'cn_anima_lllite', 'Anima-LLLite')]
+            for flag_key in other_flags:
+                for task in async_task.cn_tasks.get(flag_key, []):
+                    cn_img, cn_stop, cn_weight = task
+                    cn_img = resize_image(HWC3(cn_img), width=width, height=height)
+                    if flag_key == flags.cn_cpds and not async_task.skipping_cn_preprocessor:
+                        cn_img = preprocessors.cpds(cn_img)
+                    cn_img = HWC3(cn_img)
+                    img_t = core.numpy_to_pytorch(cn_img)
+                    task[0] = img_t
+                    if lllite_model_path:
+                        lllite_prepared.append((lllite_model_path, img_t, cn_weight, cn_stop))
+                    if async_task.debugging_cn_preprocessor:
+                        yield_result(async_task, cn_img, current_progress, async_task.black_out_nsfw, do_not_show_finished_images=True)
+
+            if len(async_task.cn_tasks.get(flags.cn_ip_face, [])) > 0:
+                print("[Anima DiT] FaceSwap is SDXL-only and safely skipped on Anima DiT architecture.")
+
+            if len(lllite_prepared) > 0:
+                pipeline.anima_lllite_tasks = lllite_prepared
+                if hasattr(pipeline, 'final_unet') and pipeline.final_unet is not None:
+                    pipeline.final_unet.lllite_tasks = lllite_prepared
+            return
+
         for task in async_task.cn_tasks[flags.cn_canny]:
             cn_img, cn_stop, cn_weight = task
             cn_img = resize_image(HWC3(cn_img), width=width, height=height)
@@ -943,7 +996,8 @@ def worker():
                     if not existing_models:
                         progressbar(async_task, 1, 'Downloading upscale models ...')
                         modules.config.downloading_upscale_model()
-                if inpaint_parameterized:
+                is_anima = ('anima' in str(async_task.base_model_name).lower())
+                if inpaint_parameterized and not is_anima:
                     progressbar(async_task, 1, 'Downloading inpainter ...')
                     inpaint_head_model_path, inpaint_patch_model_path = modules.config.downloading_inpaint_models(
                         async_task.inpaint_engine)
@@ -954,7 +1008,10 @@ def worker():
                         async_task.refiner_switch = 0.8
                 else:
                     inpaint_head_model_path, inpaint_patch_model_path = None, None
-                    print(f'[Inpaint] Parameterized inpaint is disabled.')
+                    if is_anima and inpaint_parameterized:
+                        print('[Inpaint] SDXL inpaint head is bypassed for Anima DiT (using native DiT latent inpainting).')
+                    else:
+                        print(f'[Inpaint] Parameterized inpaint is disabled.')
                 if async_task.inpaint_additional_prompt != '':
                     if async_task.prompt == '':
                         async_task.prompt = async_task.inpaint_additional_prompt
@@ -965,16 +1022,31 @@ def worker():
                 async_task.mixing_image_prompt_and_vary_upscale or \
                 async_task.mixing_image_prompt_and_inpaint:
             goals.append('cn')
-            progressbar(async_task, 1, 'Downloading control models ...')
-            if len(async_task.cn_tasks[flags.cn_canny]) > 0:
-                controlnet_canny_path = modules.config.downloading_controlnet_canny()
-            if len(async_task.cn_tasks[flags.cn_cpds]) > 0:
-                controlnet_cpds_path = modules.config.downloading_controlnet_cpds()
-            if len(async_task.cn_tasks[flags.cn_ip]) > 0:
-                clip_vision_path, ip_negative_path, ip_adapter_path = modules.config.downloading_ip_adapters('ip')
-            if len(async_task.cn_tasks[flags.cn_ip_face]) > 0:
-                clip_vision_path, ip_negative_path, ip_adapter_face_path = modules.config.downloading_ip_adapters(
-                    'face')
+            is_anima = ('anima' in str(async_task.base_model_name).lower())
+            if is_anima:
+                has_lllite_candidate = False
+                for k in [flags.cn_canny, flags.cn_cpds, flags.cn_ip, getattr(flags, 'cn_anima_lllite', 'Anima-LLLite')]:
+                    if len(async_task.cn_tasks.get(k, [])) > 0:
+                        has_lllite_candidate = True
+                        break
+                if has_lllite_candidate:
+                    progressbar(async_task, 1, 'Downloading Anima ControlNet-LLLite model ...')
+                    async_task.controlnet_lllite_path = modules.config.downloading_controlnet_anima_lllite()
+                else:
+                    async_task.controlnet_lllite_path = None
+                if len(async_task.cn_tasks.get(flags.cn_ip_face, [])) > 0:
+                    print("[Anima DiT] FaceSwap is SDXL-only and safely skipped on Anima DiT architecture.")
+            else:
+                progressbar(async_task, 1, 'Downloading control models ...')
+                if len(async_task.cn_tasks[flags.cn_canny]) > 0:
+                    controlnet_canny_path = modules.config.downloading_controlnet_canny()
+                if len(async_task.cn_tasks[flags.cn_cpds]) > 0:
+                    controlnet_cpds_path = modules.config.downloading_controlnet_cpds()
+                if len(async_task.cn_tasks[flags.cn_ip]) > 0:
+                    clip_vision_path, ip_negative_path, ip_adapter_path = modules.config.downloading_ip_adapters('ip')
+                if len(async_task.cn_tasks[flags.cn_ip_face]) > 0:
+                    clip_vision_path, ip_negative_path, ip_adapter_face_path = modules.config.downloading_ip_adapters(
+                        'face')
         if async_task.current_tab == 'enhance' and async_task.enhance_input_image is not None:
             goals.append('enhance')
             skip_prompt_processing = True

@@ -249,20 +249,31 @@ with shared.gradio_root:
                                             ip_weights.append(ip_weight)
                                             ip_ctrls.append(ip_weight)
 
-                                        ip_type = gr.Radio(label='Type', choices=flags.ip_list, value=modules.config.default_ip_types[image_count], container=False)
+                                        is_anima_init = 'anima' in str(modules.config.default_base_model_name).lower()
+                                        init_ip_choices = flags.ip_list_anima if is_anima_init else flags.ip_list
+                                        init_default_ip = flags.default_ip_anima if is_anima_init else flags.default_ip
+                                        ip_type = gr.Radio(label='Type', choices=init_ip_choices, value=init_default_ip, container=False)
                                         ip_types.append(ip_type)
                                         ip_ctrls.append(ip_type)
 
                                         ip_type.change(lambda x: flags.default_parameters[x], inputs=[ip_type], outputs=[ip_stop, ip_weight], queue=False, show_progress=False)
                                     ip_ad_cols.append(ad_col)
                         ip_advanced = gr.Checkbox(label='Advanced', value=modules.config.default_image_prompt_advanced_checkbox, container=False)
-                        gr.HTML('* \"Image Prompt\" is powered by Fooocus Image Mixture Engine (v1.0.1). <a href="https://github.com/lllyasviel/Fooocus/discussions/557" target="_blank">\U0001F4D4 Documentation</a>')
+                        ip_desc_html = (
+                            '* <b>Anima DiT Mode:</b> Image Prompt automatically uses <b>ControlNet-LLLite</b> (FaceSwap & IP-Adapter are SDXL-only and disabled).'
+                            if is_anima_init else
+                            '* \"Image Prompt\" is powered by Fooocus Image Mixture Engine (v1.0.1). <a href="https://github.com/lllyasviel/Fooocus/discussions/557" target="_blank">\U0001F4D4 Documentation</a>'
+                        )
+                        ip_desc = gr.HTML(ip_desc_html)
 
                         def ip_advance_checked(x):
+                            is_anima = 'anima' in str(modules.config.default_base_model_name).lower()
+                            def_ip = flags.default_ip_anima if is_anima else flags.default_ip
+                            choices = flags.ip_list_anima if is_anima else flags.ip_list
                             return [gr.update(visible=x)] * len(ip_ad_cols) + \
-                                [flags.default_ip] * len(ip_types) + \
-                                [flags.default_parameters[flags.default_ip][0]] * len(ip_stops) + \
-                                [flags.default_parameters[flags.default_ip][1]] * len(ip_weights)
+                                [gr.update(choices=choices, value=def_ip)] * len(ip_types) + \
+                                [flags.default_parameters[def_ip][0]] * len(ip_stops) + \
+                                [flags.default_parameters[def_ip][1]] * len(ip_weights)
 
                         ip_advanced.change(ip_advance_checked, inputs=ip_advanced,
                                            outputs=ip_ad_cols + ip_types + ip_stops + ip_weights,
@@ -697,6 +708,27 @@ with shared.gradio_root:
 
                     refiner_model.change(lambda x: gr.update(visible=x != 'None'),
                                          inputs=refiner_model, outputs=refiner_switch, show_progress=False, queue=False)
+
+                    def base_model_changed(model_name):
+                        is_anima = 'anima' in str(model_name).lower()
+                        choices = flags.ip_list_anima if is_anima else flags.ip_list
+                        val = flags.default_ip_anima if is_anima else flags.default_ip
+                        stop_val = flags.default_parameters[val][0]
+                        weight_val = flags.default_parameters[val][1]
+                        desc_val = (
+                            '* <b>Anima DiT Mode:</b> Image Prompt automatically uses <b>ControlNet-LLLite</b> (FaceSwap & IP-Adapter are SDXL-only and disabled).'
+                            if is_anima else
+                            '* \"Image Prompt\" is powered by Fooocus Image Mixture Engine (v1.0.1). <a href="https://github.com/lllyasviel/Fooocus/discussions/557" target="_blank">\U0001F4D4 Documentation</a>'
+                        )
+                        results = [gr.update(choices=choices, value=val) for _ in ip_types]
+                        results += [gr.update(value=desc_val)]
+                        results += [gr.update(value=stop_val) for _ in ip_stops]
+                        results += [gr.update(value=weight_val) for _ in ip_weights]
+                        return results
+
+                    base_model.change(base_model_changed, inputs=[base_model],
+                                      outputs=ip_types + [ip_desc] + ip_stops + ip_weights,
+                                      show_progress=False, queue=False)
 
                 with gr.Group():
                     lora_ctrls = []
