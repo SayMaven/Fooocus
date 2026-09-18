@@ -127,6 +127,13 @@ class TestAnimaPreset(unittest.TestCase):
         self.assertIn(flags.cn_anima_lllite, flags.default_parameters)
         self.assertEqual(flags.default_parameters[flags.cn_anima_lllite], (0.4, 0.2))
 
+    def test_build_launcher_includes_anima(self):
+        import inspect
+        import build_launcher
+
+        source = inspect.getsource(build_launcher.build_launcher)
+        self.assertIn("'anima'", source)
+
 
 if __name__ == '__main__':
     unittest.main()

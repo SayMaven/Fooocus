@@ -15,7 +15,7 @@ def build_launcher():
     if not is_win32_standalone_build:
         return
 
-    presets = [None, 'anime', 'realistic']
+    presets = [None, 'anime', 'realistic', 'anima']
 
     for preset in presets:
         win32_cmd_preset = win32_cmd.replace('{cmds}', '' if preset is None else f'--preset {preset}')
