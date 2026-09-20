@@ -524,6 +524,12 @@ default_upscale_model = default_upscale_model_name = get_config_item_or_set_defa
     validator=lambda x: isinstance(x, str),
     expected_type=str
 )
+default_anime_tagger = get_config_item_or_set_default(
+    key='default_anime_tagger',
+    default_value='wd-eva02-large-tagger-v3',
+    validator=lambda x: isinstance(x, str),
+    expected_type=str
+)
 default_controlnet_image_count = get_config_item_or_set_default(
     key='default_controlnet_image_count',
     default_value=4,

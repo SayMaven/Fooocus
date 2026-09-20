@@ -134,7 +134,26 @@ class TestAnimaPreset(unittest.TestCase):
         source = inspect.getsource(build_launcher.build_launcher)
         self.assertIn("'anima'", source)
 
+    def test_wd14tagger_models_and_config(self):
+        import sys
+        orig_argv = sys.argv
+        try:
+            sys.argv = ['fooocus']
+            from modules import config
+            from extras import wd14tagger
+
+            self.assertEqual(config.default_anime_tagger, 'wd-eva02-large-tagger-v3')
+            self.assertIn('wd-eva02-large-tagger-v3', wd14tagger.TAGGER_MODELS)
+            self.assertIn('wd-v1-4-moat-tagger-v2', wd14tagger.TAGGER_MODELS)
+            self.assertEqual(
+                wd14tagger.TAGGER_MODELS['wd-eva02-large-tagger-v3']['repo'],
+                'SmilingWolf/wd-eva02-large-tagger-v3'
+            )
+        finally:
+            sys.argv = orig_argv
+
 
 if __name__ == '__main__':
     unittest.main()
+
 
