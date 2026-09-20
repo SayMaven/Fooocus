@@ -993,8 +993,14 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
                 except Exception:
                     pass
                 try:
+                    if hasattr(reference_model, "detach") and callable(reference_model.detach):
+                        reference_model.detach(unpatch_all=False)
+                except Exception:
+                    pass
+                try:
                     if hasattr(reference_model, "model_options") and isinstance(reference_model.model_options, dict):
                         reference_model.model_options.clear()
+                        reference_model.model_options["transformer_options"] = {}
                     if hasattr(reference_model, "backup") and isinstance(reference_model.backup, dict):
                         reference_model.backup.clear()
                     if hasattr(reference_model, "backup_buffers") and isinstance(reference_model.backup_buffers, dict):
