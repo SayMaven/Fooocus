@@ -509,6 +509,15 @@ def _load_anima_reference_modules():
     import comfy.sample
     import comfy.sd
 
+    try:
+        import comfy.model_management as cmm
+        import ldm_patched.modules.model_management as fmm
+        if getattr(fmm, "vram_state", None) == fmm.VRAMState.HIGH_VRAM:
+            if hasattr(cmm, "vram_state") and hasattr(cmm, "VRAMState"):
+                cmm.vram_state = cmm.VRAMState.HIGH_VRAM
+    except Exception:
+        pass
+
     return comfy.sample, comfy.sd
 
 
@@ -579,7 +588,21 @@ def _get_anima_reference_model(model):
     except Exception as e:
         pass
 
+    # Ensure cached template patcher always has clean backup dicts so it never retains
+    # gigabytes of backed-up weights across generations
+    if hasattr(cached, "backup") and isinstance(cached.backup, dict):
+        cached.backup.clear()
+    if hasattr(cached, "backup_buffers") and isinstance(cached.backup_buffers, dict):
+        cached.backup_buffers.clear()
+    if hasattr(cached, "object_patches_backup") and isinstance(cached.object_patches_backup, dict):
+        cached.object_patches_backup.clear()
+
     out_model = cached.clone()
+
+    # Prevent out_model from sharing cached's backup dictionaries
+    out_model.backup = {}
+    out_model.backup_buffers = {}
+    out_model.object_patches_backup = {}
 
     loras_to_load = getattr(model, "loras_to_load", None)
     if loras_to_load is None:
@@ -969,9 +992,37 @@ def ksampler(model, positive, negative, latent, seed=None, steps=30, cfg=7.0, sa
                     reference_model.unpatch_model()
                 except Exception:
                     pass
+                try:
+                    if hasattr(reference_model, "model_options") and isinstance(reference_model.model_options, dict):
+                        reference_model.model_options.clear()
+                    if hasattr(reference_model, "backup") and isinstance(reference_model.backup, dict):
+                        reference_model.backup.clear()
+                    if hasattr(reference_model, "backup_buffers") and isinstance(reference_model.backup_buffers, dict):
+                        reference_model.backup_buffers.clear()
+                    if hasattr(reference_model, "object_patches_backup") and isinstance(reference_model.object_patches_backup, dict):
+                        reference_model.object_patches_backup.clear()
+                    if hasattr(reference_model, "patches") and isinstance(reference_model.patches, dict):
+                        reference_model.patches.clear()
+                    if hasattr(reference_model, "object_patches") and isinstance(reference_model.object_patches, dict):
+                        reference_model.object_patches.clear()
+                    reference_model.parent = None
+                except Exception:
+                    pass
+                try:
+                    import comfy.model_management as cmm
+                    if hasattr(cmm, "current_loaded_models") and isinstance(cmm.current_loaded_models, list):
+                        for lm in list(cmm.current_loaded_models):
+                            if getattr(lm, "model", None) is reference_model or getattr(getattr(lm, "model", None), "model", None) is getattr(reference_model, "model", None):
+                                cmm.current_loaded_models.remove(lm)
+                except Exception:
+                    pass
+                del reference_model
+                reference_model = None
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                     torch.cuda.ipc_collect()
+                import gc
+                gc.collect()
 
             out = latent.copy()
             if is_anima_sampler and orig_latent_ndim == 4 and getattr(samples, "ndim", 4) == 5:

@@ -59,6 +59,7 @@ class ImageUpscaleWithModel:
                     raise e
 
         upscale_model.cpu()
+        del in_img
         s = torch.clamp(s.movedim(-3,-1), min=0, max=1.0)
         return (s,)
 

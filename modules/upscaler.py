@@ -78,12 +78,18 @@ def perform_upscale(img, upscale_model_path=None):
         except Exception:
             model = ESRGAN(sdo).eval()
 
+        del sdo
         model.cpu()
         loaded_model_filename = target_model_filename
 
-    img = core.numpy_to_pytorch(img)
-    img = opImageUpscaleWithModel.upscale(model, img)[0]
-    img = core.pytorch_to_numpy(img)[0]
+    import gc
+    gc.collect()
+
+    img_tensor = core.numpy_to_pytorch(img)
+    upscaled = opImageUpscaleWithModel.upscale(model, img_tensor)[0]
+    del img_tensor
+    img_out = core.pytorch_to_numpy(upscaled)[0]
+    del upscaled
 
     if model is not None:
         try:
@@ -93,7 +99,8 @@ def perform_upscale(img, upscale_model_path=None):
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    gc.collect()
 
-    return img
+    return img_out
 
 

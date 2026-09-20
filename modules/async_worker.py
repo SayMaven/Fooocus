@@ -688,9 +688,13 @@ def worker():
         initial_latent = core.encode_vae(
             vae=candidate_vae,
             pixels=initial_pixels, tiled=True)
+        del initial_pixels
+        del candidate_vae
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
+        import gc
+        gc.collect()
 
         latent_samples = initial_latent['samples']
         if latent_samples.ndim == 5:
@@ -1171,6 +1175,12 @@ def worker():
                                                          persist_image)
 
         del task_enhance['c'], task_enhance['uc']  # Save memory
+        del tasks_enhance, task_enhance
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+        import gc
+        gc.collect()
         return current_progress, imgs[0], prompt, negative_prompt
 
     def enhance_upscale(all_steps, async_task, base_progress, callback, controlnet_canny_path, controlnet_cpds_path,
@@ -1626,6 +1636,13 @@ def worker():
             finally:
                 if pid in modules.patch.patch_settings:
                     del modules.patch.patch_settings[pid]
+                del task
+                task = None
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+                import gc
+                gc.collect()
     pass
 
 
