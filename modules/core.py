@@ -774,6 +774,8 @@ def encode_vae_inpaint(vae, pixels, mask):
     pixels = pixels * (1 - w) + 0.5 * w
 
     latent = vae.encode(pixels)
+    if getattr(latent, 'ndim', 4) == 5:
+        latent = latent.squeeze(2)
     B, C, H, W = latent.shape
 
     latent_mask = mask[:, None, :, :]

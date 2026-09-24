@@ -58,6 +58,16 @@ def generate_mask_from_image(image: np.ndarray, mask_model: str = 'sam', extras=
     if 'image' in image:
         image = image['image']
 
+    is_yolo = (
+        mask_model in getattr(modules.flags, 'yolo_detection_models', []) or
+        mask_model.endswith('.onnx') or mask_model.endswith('.pt') or
+        'yolo' in mask_model.lower() or mask_model in getattr(modules.config, 'detection_filenames', [])
+    )
+    if is_yolo:
+        from extras.yolo_detector import generate_yolo_mask
+        mask_result, box_count = generate_yolo_mask(image, mask_model)
+        return mask_result, box_count, box_count, box_count
+
     if mask_model != 'sam' or sam_options is None:
         result = remove(
             image,

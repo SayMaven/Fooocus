@@ -600,7 +600,11 @@ def worker():
             )
         if not inpaint_disable_initial_latent:
             initial_latent = {'samples': latent_fill}
-        B, C, H, W = latent_fill.shape
+        if getattr(latent_fill, 'ndim', 4) == 5:
+            latent_fill_2d = latent_fill.squeeze(2)
+        else:
+            latent_fill_2d = latent_fill
+        B, C, H, W = latent_fill_2d.shape
         height, width = H * 8, W * 8
         final_height, final_width = inpaint_worker.current_task.image.shape[:2]
         print(f'Final resolution is {str((final_width, final_height))}, latent is {str((width, height))}.')
@@ -1121,6 +1125,10 @@ def worker():
         inpaint_parameterized = inpaint_engine != 'None'  # inpaint_engine = None, improve detail
         initial_latent = None
 
+        is_anima = core._can_use_anima_reference_sampler(pipeline.final_unet, getattr(pipeline, 'final_refiner', None))
+        if is_anima:
+            inpaint_parameterized = False
+
         prompt = prepare_enhance_prompt(prompt, async_task.prompt)
         negative_prompt = prepare_enhance_prompt(negative_prompt, async_task.negative_prompt)
 
@@ -1555,8 +1563,18 @@ def worker():
                 print(f'[Enhance] {sam_detection_count} segments detected in boxes')
                 print(f'[Enhance] {sam_detection_on_mask_count} segments applied to mask')
 
+                is_yolo_model = (
+                    enhance_mask_model in getattr(modules.flags, 'yolo_detection_models', []) or
+                    enhance_mask_model.endswith('.onnx') or enhance_mask_model.endswith('.pt') or
+                    'yolo' in enhance_mask_model.lower() or
+                    enhance_mask_model in getattr(modules.config, 'detection_filenames', [])
+                )
+
                 if enhance_mask_model == 'sam' and (dino_detection_count == 0 or not async_task.debugging_dino and sam_detection_on_mask_count == 0):
                     print(f'[Enhance] No "{enhance_mask_dino_prompt_text}" detected, skipping')
+                    continue
+                elif is_yolo_model and dino_detection_count == 0:
+                    print(f'[Enhance] No objects detected with {enhance_mask_model}, skipping')
                     continue
 
                 goals_enhance = ['inpaint']

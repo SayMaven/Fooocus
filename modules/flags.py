@@ -88,7 +88,16 @@ default_parameters = {
 
 output_formats = ['png', 'jpeg', 'webp']
 
-inpaint_mask_models = ['u2net', 'u2netp', 'u2net_human_seg', 'u2net_cloth_seg', 'silueta', 'isnet-general-use', 'isnet-anime', 'sam']
+yolo_detection_models = [
+    'yolov8n-animeface.onnx',
+    'yolov8s-animeface.onnx',
+    'face_yolov8n.onnx',
+    'yolov8n-eyes.onnx',
+    'hand_yolov8n.onnx',
+    'person_yolov8n.onnx',
+]
+
+inpaint_mask_models = yolo_detection_models + ['sam', 'u2net', 'u2netp', 'u2net_human_seg', 'u2net_cloth_seg', 'silueta', 'isnet-general-use', 'isnet-anime']
 inpaint_mask_cloth_category = ['full', 'upper', 'lower']
 inpaint_mask_sam_model = ['vit_b', 'vit_l', 'vit_h']
 

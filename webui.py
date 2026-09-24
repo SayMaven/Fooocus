@@ -435,6 +435,7 @@ with shared.gradio_root:
                     enhance_inpaint_mode_ctrls = []
                     enhance_inpaint_engine_ctrls = []
                     enhance_inpaint_update_ctrls = []
+                    enhance_mask_model_ctrls = []
                     for index in range(modules.config.default_enhance_tabs):
                         with gr.Tab(label=f'#{index + 1}') as enhance_tab_item:
                             enhance_enabled = gr.Checkbox(label='Enable', value=False, elem_classes='min_check',
@@ -464,8 +465,9 @@ with shared.gradio_root:
 
                             with gr.Accordion("Detection", open=False):
                                 enhance_mask_model = gr.Dropdown(label='Mask generation model',
-                                                                 choices=flags.inpaint_mask_models,
+                                                                 choices=modules.config.get_all_mask_models(),
                                                                  value=modules.config.default_enhance_inpaint_mask_model)
+                                enhance_mask_model_ctrls.append(enhance_mask_model)
                                 enhance_mask_cloth_category = gr.Dropdown(label='Cloth category',
                                                                           choices=flags.inpaint_mask_cloth_category,
                                                                           value=modules.config.default_inpaint_mask_cloth_category,
@@ -943,6 +945,8 @@ with shared.gradio_root:
                                     gr.update(choices=['None'] + modules.config.lora_filenames), gr.update()]
                     results += [gr.update(choices=['Default (Fooocus)'] + modules.config.upscale_filenames)]
                     results += [gr.update(choices=['Default (Fooocus)'] + modules.config.upscale_filenames)]
+                    for _ in enhance_mask_model_ctrls:
+                        results += [gr.update(choices=modules.config.get_all_mask_models())]
                     return results
 
                 refresh_files_output = [base_model, refiner_model, vae_name]
@@ -950,6 +954,7 @@ with shared.gradio_root:
                     refresh_files_output += [preset_selection]
                 refresh_files_output += lora_ctrls
                 refresh_files_output += [uov_upscale_model, enhance_uov_upscale_model]
+                refresh_files_output += enhance_mask_model_ctrls
                 refresh_files.click(refresh_files_clicked, [], refresh_files_output,
                                     queue=False, show_progress=False)
 

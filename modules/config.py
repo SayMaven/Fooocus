@@ -202,6 +202,7 @@ path_fooocus_expansion = get_dir_or_set_default('path_fooocus_expansion', '../mo
 path_wildcards = get_dir_or_set_default('path_wildcards', '../wildcards/')
 path_safety_checker = get_dir_or_set_default('path_safety_checker', '../models/safety_checker/')
 path_sam = get_dir_or_set_default('path_sam', '../models/sam/')
+path_detection = get_dir_or_set_default('path_detection', '../models/detection/')
 path_outputs = get_path_output()
 
 
@@ -832,6 +833,7 @@ lora_filenames = []
 vae_filenames = []
 wildcard_filenames = []
 upscale_filenames = []
+detection_filenames = []
 
 
 def get_model_filenames(folder_paths, extensions=None, name_filter=None):
@@ -848,13 +850,14 @@ def get_model_filenames(folder_paths, extensions=None, name_filter=None):
 
 
 def update_files():
-    global model_filenames, lora_filenames, vae_filenames, wildcard_filenames, available_presets, upscale_filenames
+    global model_filenames, lora_filenames, vae_filenames, wildcard_filenames, available_presets, upscale_filenames, detection_filenames
     model_filenames = get_model_filenames(paths_checkpoints)
     lora_filenames = get_model_filenames(paths_loras)
     vae_filenames = get_model_filenames(path_vae)
     wildcard_filenames = get_files_from_folder(path_wildcards, ['.txt'])
     available_presets = get_presets()
     upscale_filenames = [f for f in get_model_filenames(path_upscale_models, ['.pth', '.safetensors', '.bin', '.pt']) if f != 'fooocus_upscaler_s409985e5.bin']
+    detection_filenames = [f for f in get_model_filenames(path_detection, ['.onnx', '.pt', '.pth'])]
     return
 
 
@@ -1042,3 +1045,38 @@ def downloading_sam_vit_h():
         file_name='sam_vit_h_4b8939.pth'
     )
     return os.path.join(path_sam, 'sam_vit_h_4b8939.pth')
+
+
+yolo_detection_models = {
+    'yolov8n-animeface.onnx': 'https://huggingface.co/deepghs/anime_face_detection/resolve/main/face_detect_v1.4_n/model.onnx',
+    'yolov8s-animeface.onnx': 'https://huggingface.co/deepghs/anime_face_detection/resolve/main/face_detect_v1.4_s/model.onnx',
+    'face_yolov8n.onnx': 'https://huggingface.co/deepghs/yolo-face/resolve/main/yolov8n-face/model.onnx',
+    'yolov8n-eyes.onnx': 'https://huggingface.co/deepghs/anime_eye_detection/resolve/main/eye_detect_v1.0_n/model.onnx',
+    'hand_yolov8n.onnx': 'https://huggingface.co/deepghs/anime_hand_detection/resolve/main/hand_detect_v1.0_n/model.onnx',
+    'person_yolov8n.onnx': 'https://huggingface.co/deepghs/anime_person_detection/resolve/main/person_detect_v1.1_n/model.onnx',
+}
+
+
+def downloading_yolo_detection_model(model_name: str) -> str:
+    if not model_name.endswith('.onnx') and not model_name.endswith('.pt') and not model_name.endswith('.pth'):
+        model_name = f"{model_name}.onnx"
+    local_path = os.path.join(path_detection, model_name)
+    if os.path.exists(local_path):
+        return local_path
+    if model_name in yolo_detection_models:
+        url = yolo_detection_models[model_name]
+        load_file_from_url(
+            url=url,
+            model_dir=path_detection,
+            file_name=model_name
+        )
+        return local_path
+    return local_path
+
+
+def get_all_mask_models():
+    builtin_yolo = list(yolo_detection_models.keys())
+    custom_yolo = [f for f in detection_filenames if f not in builtin_yolo]
+    other_models = [m for m in modules.flags.inpaint_mask_models if m not in builtin_yolo]
+    return builtin_yolo + custom_yolo + other_models
+
