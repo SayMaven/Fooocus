@@ -34,6 +34,23 @@ This repository is an active fork extending Fooocus with **Dual-Architecture Sup
   - Lightweight model footprint (~52 MB) with automatic lazy downloading (`any-test-like-v2.safetensors` from `kohyass/anima-pencil-xl-controlnet-lllite`).
   - Calibrated default parameters (`strength: 0.2`, `stop_at: 0.4`) tuned to preserve crisp outlines and structural control without over-saturation across both base diffusion and high-res upscale passes.
   - Dynamic WebUI switching: automatically restricts Image Prompt methods to `["Anima-LLLite"]` for Anima models while preserving the full suite (`ImagePrompt`, `FaceSwap`, `PyraCanny`, `CPDS`) for SDXL models.
+- **YOLO Anime Detection & ADetailer-Style Multi-Tab Enhancement**:
+  - **Native Anime Detection Models**: Integrated ONNX models specifically trained for anime/illustration characters (DeepGHS & Hysts):
+    - `yolov8n-animeface.onnx` (Default mask generation model for both Inpaint & Enhance tabs)
+    - `yolov8s-animeface.onnx`
+    - `face_yolov8n.onnx`
+    - `yolov8n-eyes.onnx` (Anime eye detection)
+    - `hand_yolov8n.onnx` (Anime hand & finger detection)
+    - `person_yolov8n.onnx` (Anime full-body character detection)
+  - **Dynamic Custom Model Auto-Discovery**: Drop any custom YOLO `.onnx` or `.pt` model into `models/detection/` to automatically register it in the WebUI.
+  - **Seam-Free Elliptical Feathering**: Replaced harsh rectangular bounding-box cuts with smooth elliptical mask contours (`cv2.ellipse`), Gaussian feathering (`k=31`), and a 2D boundary window taper inside `InpaintWorker`, completely eliminating hard boundary cut lines.
+  - **Calibrated DiT Inpaint Defaults**:
+    - Default Inpaint Method: **`Improve Detail (face, hand, eyes, etc.)`**
+    - Default Denoise Strength: **`0.3`** (was 0.5; preserves 70% of character anatomy/pose while refining fine facial/hand micro-details)
+    - Default Respective Field: **`0.0`** (tight crop for maximum localized detail resolution)
+    - Inpaint Engine: **`None`** (native DiT crop-and-stitch bypasses incompatible SDXL inpaint heads)
+  - **Sequential Multi-Tab Enhancement Pipeline**: Chain detection models across tabs (e.g. `#1 Anime Face` $\rightarrow$ `#2 Hands` $\rightarrow$ `#3 Eyes`) with zero-VRAM ONNX inference and smart auto-skip when target objects are not present.
+  - **Persistent Prompt LoRA Retention**: LoRAs defined via prompt syntax (`<lora:name:weight>`) are preserved across all sequential enhancement passes, preventing character LoRAs from unloading when custom enhancement prompts (e.g. `beautiful eyes`) are used.
 - **Enhanced 3-Stage Gallery Zoom Viewer**:
   - Intuitive 3-stage inspection flow: **Grid Thumbnails** $\rightarrow$ **Canvas Focused View** $\rightarrow$ **Fullscreen Lightbox Modal**.
   - Centered fullscreen lightbox with keyboard arrow navigation (`ArrowLeft` / `ArrowRight`) and quick escape (`Esc`), eliminating UI cut-offs when previewing high-resolution generations.
@@ -82,7 +99,7 @@ Also, [click here to browse the advanced features.](https://github.com/lllyasvie
 
 You can directly download Fooocus with:
 
-**[>>> Click here to download <<<](https://github.com/lllyasviel/Fooocus/releases/download/v2.5.0/Fooocus_win64_2-5-0.7z)**
+**[>>> Click here to download <<<](https://github.com/SayMaven/Fooocus/releases/download/v2.5.6-saymaven/Fooocus_win64_SayMaven_v2.5.6.7z)**
 
 After you download the file, please uncompress it and then run the "run.bat".
 

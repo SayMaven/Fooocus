@@ -124,7 +124,7 @@ def inpaint_mode_change(mode, inpaint_engine_version):
         return [
             gr.update(visible=True), gr.update(visible=False, value=[]),
             gr.update(visible=True, samples=modules.config.example_inpaint_prompts),
-            False, 'None', 0.5, 0.0
+            False, 'None', 0.3, 0.0
         ]
 
     if inpaint_engine_version == 'empty':
@@ -502,16 +502,16 @@ with shared.gradio_root:
                                 enhance_inpaint_engine = gr.Dropdown(label='Inpaint Engine',
                                                                      value=modules.config.default_inpaint_engine_version,
                                                                      choices=flags.inpaint_engine_versions,
-                                                                     info='Version of Fooocus inpaint model. If set, use performance Quality or Speed (no performance LoRAs) for best results.')
+                                                                     info='Version of Fooocus inpaint model. Note: For Anima (DiT) base models, "None" is required (native DiT crop-and-stitch).')
                                 enhance_inpaint_strength = gr.Slider(label='Inpaint Denoising Strength',
                                                                      minimum=0.0, maximum=1.0, step=0.001,
-                                                                     value=1.0,
+                                                                     value=0.3 if modules.config.default_inpaint_method == flags.inpaint_option_detail else 1.0,
                                                                      info='Same as the denoising strength in A1111 inpaint. '
                                                                           'Only used in inpaint, not used in outpaint. '
                                                                           '(Outpaint always use 1.0)')
                                 enhance_inpaint_respective_field = gr.Slider(label='Inpaint Respective Field',
                                                                              minimum=0.0, maximum=1.0, step=0.001,
-                                                                             value=0.618,
+                                                                             value=0.0 if modules.config.default_inpaint_method == flags.inpaint_option_detail else 0.618,
                                                                              info='The area to inpaint. '
                                                                                   'Value 0 is same as "Only Masked" in A1111. '
                                                                                   'Value 1 is same as "Whole Image" in A1111. '
@@ -880,14 +880,16 @@ with shared.gradio_root:
                         inpaint_engine = gr.Dropdown(label='Inpaint Engine',
                                                      value=modules.config.default_inpaint_engine_version,
                                                      choices=flags.inpaint_engine_versions,
-                                                     info='Version of Fooocus inpaint model. If set, use performance Quality or Speed (no performance LoRAs) for best results.')
+                                                     info='Version of Fooocus inpaint model. Note: For Anima (DiT) base models, "None" is required (native DiT crop-and-stitch).')
                         inpaint_strength = gr.Slider(label='Inpaint Denoising Strength',
-                                                     minimum=0.0, maximum=1.0, step=0.001, value=1.0,
+                                                     minimum=0.0, maximum=1.0, step=0.001,
+                                                     value=0.3 if modules.config.default_inpaint_method == flags.inpaint_option_detail else 1.0,
                                                      info='Same as the denoising strength in A1111 inpaint. '
                                                           'Only used in inpaint, not used in outpaint. '
                                                           '(Outpaint always use 1.0)')
                         inpaint_respective_field = gr.Slider(label='Inpaint Respective Field',
-                                                             minimum=0.0, maximum=1.0, step=0.001, value=0.618,
+                                                             minimum=0.0, maximum=1.0, step=0.001,
+                                                             value=0.0 if modules.config.default_inpaint_method == flags.inpaint_option_detail else 0.618,
                                                              info='The area to inpaint. '
                                                                   'Value 0 is same as "Only Masked" in A1111. '
                                                                   'Value 1 is same as "Whole Image" in A1111. '

@@ -584,7 +584,7 @@ default_inpaint_advanced_masking_checkbox = get_config_item_or_set_default(
 )
 default_inpaint_method = get_config_item_or_set_default(
     key='default_inpaint_method',
-    default_value=modules.flags.inpaint_option_default,
+    default_value=modules.flags.inpaint_option_detail,
     validator=lambda x: x in modules.flags.inpaint_options,
     expected_type=str
 )
@@ -712,14 +712,14 @@ default_invert_mask_checkbox = get_config_item_or_set_default(
 
 default_inpaint_mask_model = get_config_item_or_set_default(
     key='default_inpaint_mask_model',
-    default_value='isnet-general-use',
+    default_value='yolov8n-animeface.onnx',
     validator=lambda x: x in modules.flags.inpaint_mask_models,
     expected_type=str
 )
 
 default_enhance_inpaint_mask_model = get_config_item_or_set_default(
     key='default_enhance_inpaint_mask_model',
-    default_value='sam',
+    default_value='yolov8n-animeface.onnx',
     validator=lambda x: x in modules.flags.inpaint_mask_models,
     expected_type=str
 )
