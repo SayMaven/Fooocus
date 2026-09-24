@@ -175,6 +175,29 @@ class InpaintWorker:
 
         # soft pixels
         self.mask = morphological_open(mask)
+
+        # Apply edge falloff to ensure blending to zero at the boundary of interested_area
+        a, b, c, d = self.interested_area
+        crop_h = b - a
+        crop_w = d - c
+        if crop_h > 16 and crop_w > 16:
+            feather_size = min(32, crop_h // 8, crop_w // 8)
+            if feather_size > 1:
+                ramp_y = np.ones(crop_h, dtype=np.float32)
+                if a > 0:
+                    ramp_y[:feather_size] = np.linspace(0, 1, feather_size)
+                if b < image.shape[0]:
+                    ramp_y[-feather_size:] = np.linspace(1, 0, feather_size)
+
+                ramp_x = np.ones(crop_w, dtype=np.float32)
+                if c > 0:
+                    ramp_x[:feather_size] = np.linspace(0, 1, feather_size)
+                if d < image.shape[1]:
+                    ramp_x[-feather_size:] = np.linspace(1, 0, feather_size)
+
+                window = np.outer(ramp_y, ramp_x)
+                self.mask[a:b, c:d] = (self.mask[a:b, c:d].astype(np.float32) * window).clip(0, 255).astype(np.uint8)
+
         self.image = image
 
         # ending

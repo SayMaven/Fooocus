@@ -167,7 +167,20 @@ def generate_yolo_mask(image: np.ndarray, model_name: str, conf_threshold: float
         px2 = min(W, x2 + pad_x)
         py2 = min(H, y2 + pad_y)
 
-        cv2.rectangle(mask_2d, (px1, py1), (px2, py2), 255, -1)
+        # Use smooth elliptical contour for face/eyes/hands to follow natural anatomy
+        if 'person' in model_name.lower():
+            cv2.rectangle(mask_2d, (px1, py1), (px2, py2), 255, -1)
+        else:
+            cx = (px1 + px2) // 2
+            cy = (py1 + py2) // 2
+            rx = max(1, (px2 - px1) // 2)
+            ry = max(1, (py2 - py1) // 2)
+            cv2.ellipse(mask_2d, (cx, cy), (rx, ry), 0, 0, 360, 255, -1)
+
+    # Apply soft Gaussian feathering so mask edges blend smoothly without hard rectangular seams
+    if len(boxes) > 0 and cv2 is not None:
+        blur_k = 31
+        mask_2d = cv2.GaussianBlur(mask_2d, (blur_k, blur_k), 0)
 
     mask_3d = np.dstack([mask_2d, mask_2d, mask_2d])
     return mask_3d, len(boxes)
