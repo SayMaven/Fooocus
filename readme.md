@@ -54,11 +54,16 @@ This repository is an active fork extending Fooocus with **Dual-Architecture Sup
 - **Enhanced 3-Stage Gallery Zoom Viewer**:
   - Intuitive 3-stage inspection flow: **Grid Thumbnails** $\rightarrow$ **Canvas Focused View** $\rightarrow$ **Fullscreen Lightbox Modal**.
   - Centered fullscreen lightbox with keyboard arrow navigation (`ArrowLeft` / `ArrowRight`) and quick escape (`Esc`), eliminating UI cut-offs when previewing high-resolution generations.
-- **Fast Startup & Colab Auto-Bypass**:
-  - Pre-built binary wheel integration for `numpy-1.26.4` on Python 3.13, skipping 7-minute Meson/Ninja compilations.
-  - CLI flag `--skip-pip` (or `SKIP_PIP=1`) to skip package dependency loops on warm runtimes.
+- **Modernized Gradio 6, NumPy 2 & CuPy v14 Stack**:
+  - Fully upgraded UI and tensor ecosystem to **Gradio 6.26.0**, **NumPy 2.5.3**, and **CuPy 14.0.1** on Python 3.13.
+  - Zero-drift locked dependencies in `requirements_versions.txt` for 100% reproducible Colab startups.
+  - Native `ImageEditor` adapter supporting dictionary payload structures (`background` + `layers` with alpha mask extraction) alongside legacy sketch fallbacks.
+  - Resilient custom route handlers (`/file=` and `/history_log`) directly bound to FastAPI, ensuring seamless access to output images and private history logs.
+  - Responsive WebUI enhancements: symmetrical 2x2 Image Prompt grid, inline horizontal control buttons (*Input Image*, *Enhance*, *Advanced*), and a 2-column scrollable styles selector.
+- **Fast Startup & Colab Optimization**:
+  - Native NumPy 2.x support completely eliminates legacy 7-minute Meson/Ninja wheel compilation on Python 3.13.
+  - CLI flag `--skip-pip` (or `SKIP_PIP=1`) to bypass requirements verification on warm runtimes.
   - Automated Civitai token authentication (`CIVITAI_API_TOKEN` / `CIVITAI_TOKEN`).
-  - Network dependency locking (`starlette==0.37.2`, `fastapi==0.112.2`) ensuring unbroken Gradio websocket connectivity.
 
 # Features
 
@@ -99,7 +104,7 @@ Also, [click here to browse the advanced features.](https://github.com/lllyasvie
 
 You can directly download Fooocus with:
 
-**[>>> Click here to download <<<](https://github.com/SayMaven/Fooocus/releases/download/v2.5.6-saymaven/Fooocus_win64_SayMaven_v2.5.6.7z)**
+**[>>> Click here to download <<<](https://github.com/SayMaven/Fooocus/releases/download/v2.5.7-saymaven/Fooocus_win64_SayMaven_v2.5.7.7z)**
 
 After you download the file, please uncompress it and then run the "run.bat".
 
