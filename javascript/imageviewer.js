@@ -45,7 +45,7 @@ function updateOnBackgroundChange() {
 }
 
 function all_gallery_buttons() {
-    var allGalleryButtons = gradioApp().querySelectorAll('#final_gallery .grid-container button, #final_gallery button, .image_gallery .thumbnails > .thumbnail-item, .image_gallery button');
+    var allGalleryButtons = gradioApp().querySelectorAll('#final_gallery .grid-container button, #final_gallery button, .image_gallery .thumbnails > .thumbnail-item, .image_gallery button, #final_gallery [data-testid*="thumbnail"], #final_gallery [aria-label*="Thumbnail"], #final_gallery .thumbnail-item');
     var visibleGalleryButtons = [];
     allGalleryButtons.forEach(function(elem) {
         if ((elem.offsetParent || elem.parentElement?.offsetParent) && (elem.querySelector('img') || elem.tagName === 'IMG')) {

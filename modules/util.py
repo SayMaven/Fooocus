@@ -5,7 +5,10 @@ import datetime
 import random
 import math
 import os
-import cv2
+try:
+    import cv2
+except Exception:
+    cv2 = None
 import re
 from typing import List, Tuple, AnyStr, NamedTuple
 
@@ -30,10 +33,20 @@ HASH_SHA256_LENGTH = 10
 
 def erode_or_dilate(x, k):
     k = int(k)
-    if k > 0:
-        return cv2.dilate(x, kernel=np.ones(shape=(3, 3), dtype=np.uint8), iterations=k)
-    if k < 0:
-        return cv2.erode(x, kernel=np.ones(shape=(3, 3), dtype=np.uint8), iterations=-k)
+    if cv2 is not None:
+        if k > 0:
+            return cv2.dilate(x, kernel=np.ones(shape=(3, 3), dtype=np.uint8), iterations=k)
+        if k < 0:
+            return cv2.erode(x, kernel=np.ones(shape=(3, 3), dtype=np.uint8), iterations=-k)
+    else:
+        from PIL import ImageFilter
+        pil_im = Image.fromarray(x)
+        for _ in range(abs(k)):
+            if k > 0:
+                pil_im = pil_im.filter(ImageFilter.MaxFilter(3))
+            elif k < 0:
+                pil_im = pil_im.filter(ImageFilter.MinFilter(3))
+        return np.array(pil_im)
     return x
 
 
@@ -131,6 +144,8 @@ def set_image_shape_ceil(im, shape_ceil):
 
 
 def HWC3(x):
+    if isinstance(x, Image.Image):
+        x = np.array(x.convert('RGB'))
     assert x.dtype == np.uint8
     if x.ndim == 2:
         x = x[:, :, None]
@@ -147,6 +162,154 @@ def HWC3(x):
         y = color * alpha + 255.0 * (1.0 - alpha)
         y = y.clip(0, 255).astype(np.uint8)
         return y
+
+
+def to_numpy_image(img):
+    """Safely converts PIL Image, numpy array, or file path to uint8 numpy array."""
+    if img is None:
+        return None
+    if isinstance(img, Image.Image):
+        return np.array(img.convert('RGB'))
+    if isinstance(img, np.ndarray):
+        return img
+    if isinstance(img, str) and os.path.exists(img):
+        return np.array(Image.open(img).convert('RGB'))
+    try:
+        return np.array(img)
+    except Exception:
+        return None
+
+
+def extract_inpaint_image_and_mask(data, is_mask_upload=False):
+    """
+    Adapter layer supporting dual-compatibility:
+    1. Gradio 5/6 ImageEditor:
+       {'background': Image/ndarray, 'layers': [Image/ndarray, ...], 'composite': Image/ndarray}
+    2. Gradio 3/4 sketch dict:
+       {'image': ndarray, 'mask': ndarray}
+    3. Tuple / List:
+       (image, mask)
+    4. Raw single Image/ndarray:
+       returns (image, zeros_mask) or (image, binarized_mask if is_mask_upload)
+
+    Returns:
+       (image: np.ndarray [H, W, 3] uint8, mask: np.ndarray [H, W] uint8 (0-255))
+    """
+    if data is None:
+        return None, None
+
+    image, mask = None, None
+
+    # Case 1: Gradio 5/6 ImageEditor dict
+    if isinstance(data, dict) and ('background' in data or 'layers' in data or 'composite' in data):
+        bg = data.get('background')
+        composite = data.get('composite')
+        layers = data.get('layers', [])
+
+        raw_image = bg if bg is not None else composite
+        image = to_numpy_image(raw_image)
+        if image is not None:
+            image = HWC3(image)
+
+        if layers and len(layers) > 0:
+            target_h, target_w = image.shape[:2] if image is not None else (None, None)
+            mask_accum = None
+            for layer in layers:
+                if layer is None:
+                    continue
+                layer_np = to_numpy_image(layer)
+                if layer_np is None:
+                    continue
+
+                # RGBA layer: alpha channel contains user brush strokes
+                if layer_np.ndim == 3 and layer_np.shape[2] == 4:
+                    cur_mask = layer_np[:, :, 3]
+                elif layer_np.ndim == 3:
+                    cur_mask = np.max(layer_np, axis=2)
+                elif layer_np.ndim == 2:
+                    cur_mask = layer_np
+                else:
+                    continue
+
+                if target_h is not None and target_w is not None and cur_mask.shape[:2] != (target_h, target_w):
+                    if cv2 is not None:
+                        cur_mask = cv2.resize(cur_mask, (target_w, target_h), interpolation=cv2.INTER_NEAREST)
+                    else:
+                        cur_mask = np.array(Image.fromarray(cur_mask).resize((target_w, target_h), resample=Image.NEAREST))
+
+                if mask_accum is None:
+                    mask_accum = cur_mask.astype(np.uint8)
+                else:
+                    if mask_accum.shape != cur_mask.shape:
+                        if cv2 is not None:
+                            cur_mask = cv2.resize(cur_mask, (mask_accum.shape[1], mask_accum.shape[0]), interpolation=cv2.INTER_NEAREST)
+                        else:
+                            cur_mask = np.array(Image.fromarray(cur_mask).resize((mask_accum.shape[1], mask_accum.shape[0]), resample=Image.NEAREST))
+                    mask_accum = np.maximum(mask_accum, cur_mask.astype(np.uint8))
+
+            if mask_accum is not None and np.any(mask_accum > 0):
+                mask = (mask_accum > 0).astype(np.uint8) * 255
+
+        if mask is None and image is not None:
+            if is_mask_upload:
+                mask = (np.mean(image, axis=2) > 127).astype(np.uint8) * 255
+            else:
+                mask = np.zeros(shape=image.shape[:2], dtype=np.uint8)
+
+    # Case 2: Gradio 3/4 sketch dict ('image' and 'mask')
+    elif isinstance(data, dict) and ('image' in data or 'mask' in data):
+        image = to_numpy_image(data.get('image'))
+        if image is not None:
+            image = HWC3(image)
+
+        raw_mask = data.get('mask')
+        if raw_mask is not None:
+            mask = to_numpy_image(raw_mask)
+            if mask is not None:
+                if mask.ndim == 3:
+                    mask = mask[:, :, 0]
+                mask = (mask > 0).astype(np.uint8) * 255
+        elif image is not None:
+            if is_mask_upload:
+                mask = (np.mean(image, axis=2) > 127).astype(np.uint8) * 255
+            else:
+                mask = np.zeros(shape=image.shape[:2], dtype=np.uint8)
+
+    # Case 3: Tuple or list (image, mask)
+    elif isinstance(data, (tuple, list)) and len(data) >= 2:
+        image = to_numpy_image(data[0])
+        if image is not None:
+            image = HWC3(image)
+        mask = to_numpy_image(data[1])
+        if mask is not None:
+            if mask.ndim == 3:
+                mask = mask[:, :, 0]
+            mask = (mask > 0).astype(np.uint8) * 255
+        elif image is not None:
+            if is_mask_upload:
+                mask = (np.mean(image, axis=2) > 127).astype(np.uint8) * 255
+            else:
+                mask = np.zeros(shape=image.shape[:2], dtype=np.uint8)
+
+    # Case 4: Raw single image (no mask)
+    else:
+        image = to_numpy_image(data)
+        if image is not None:
+            image = HWC3(image)
+            if is_mask_upload:
+                mask = (np.mean(image, axis=2) > 127).astype(np.uint8) * 255
+            else:
+                mask = np.zeros(shape=image.shape[:2], dtype=np.uint8)
+
+    # Uniform validation: ensure mask matches image dimensions
+    if image is not None and mask is not None and mask.shape[:2] != image.shape[:2]:
+        H, W = image.shape[:2]
+        if cv2 is not None:
+            mask = cv2.resize(mask, (W, H), interpolation=cv2.INTER_NEAREST)
+        else:
+            mask = np.array(Image.fromarray(mask).resize((W, H), resample=Image.NEAREST))
+
+    return image, mask
 
 
 def remove_empty_str(items, default=None):

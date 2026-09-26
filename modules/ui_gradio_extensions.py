@@ -7,7 +7,7 @@ import args_manager
 from modules.localization import localization_js
 
 
-GradioTemplateResponseOriginal = gr.routes.templates.TemplateResponse
+GradioTemplateResponseOriginal = getattr(getattr(getattr(gr, 'routes', None), 'templates', None), 'TemplateResponse', None)
 
 modules_path = os.path.dirname(os.path.realpath(__file__))
 script_path = os.path.dirname(modules_path)
@@ -22,46 +22,69 @@ def webpath(fn):
     return f'file={web_path}?{os.path.getmtime(fn)}'
 
 
+def read_asset_file(rel_path):
+    path = os.path.join(script_path, rel_path) if not os.path.isabs(rel_path) else rel_path
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception:
+            return ''
+    return ''
+
+
+def get_css_content():
+    return read_asset_file('css/style.css')
+
+
 def javascript_html():
-    script_js_path = webpath('javascript/script.js')
-    context_menus_js_path = webpath('javascript/contextMenus.js')
-    localization_js_path = webpath('javascript/localization.js')
-    zoom_js_path = webpath('javascript/zoom.js')
-    edit_attention_js_path = webpath('javascript/edit-attention.js')
-    viewer_js_path = webpath('javascript/viewer.js')
-    image_viewer_js_path = webpath('javascript/imageviewer.js')
+    js_files = [
+        'javascript/script.js',
+        'javascript/contextMenus.js',
+        'javascript/localization.js',
+        'javascript/zoom.js',
+        'javascript/edit-attention.js',
+        'javascript/viewer.js',
+        'javascript/imageviewer.js',
+    ]
     samples_path = webpath(os.path.abspath('./sdxl_styles/samples/fooocus_v2.jpg'))
     head = f'<script type="text/javascript">{localization_js(args_manager.args.language)}</script>\n'
-    head += f'<script type="text/javascript" src="{script_js_path}"></script>\n'
-    head += f'<script type="text/javascript" src="{context_menus_js_path}"></script>\n'
-    head += f'<script type="text/javascript" src="{localization_js_path}"></script>\n'
-    head += f'<script type="text/javascript" src="{zoom_js_path}"></script>\n'
-    head += f'<script type="text/javascript" src="{edit_attention_js_path}"></script>\n'
-    head += f'<script type="text/javascript" src="{viewer_js_path}"></script>\n'
-    head += f'<script type="text/javascript" src="{image_viewer_js_path}"></script>\n'
+    for js_file in js_files:
+        content = read_asset_file(js_file)
+        if content:
+            head += f'<script type="text/javascript">\n{content}\n</script>\n'
     head += f'<meta name="samples-path" content="{samples_path}">\n'
 
     if args_manager.args.theme:
-        head += f'<script type="text/javascript">set_theme(\"{args_manager.args.theme}\");</script>\n'
+        head += f'<script type="text/javascript">if (typeof set_theme === "function") set_theme(\"{args_manager.args.theme}\");</script>\n'
 
     return head
 
 
 def css_html():
-    style_css_path = webpath('css/style.css')
-    head = f'<link rel="stylesheet" property="stylesheet" href="{style_css_path}">'
-    return head
+    content = get_css_content()
+    if content:
+        return f'<style>\n{content}\n</style>'
+    return ''
 
 
 def reload_javascript():
+    if GradioTemplateResponseOriginal is None:
+        return
+
     js = javascript_html()
     css = css_html()
 
     def template_response(*args, **kwargs):
         res = GradioTemplateResponseOriginal(*args, **kwargs)
-        res.body = res.body.replace(b'</head>', f'{js}</head>'.encode("utf8"))
-        res.body = res.body.replace(b'</body>', f'{css}</body>'.encode("utf8"))
-        res.init_headers()
+        if hasattr(res, 'body') and res.body:
+            res.body = res.body.replace(b'</head>', f'{js}</head>'.encode("utf8"))
+            res.body = res.body.replace(b'</body>', f'{css}</body>'.encode("utf8"))
+            if hasattr(res, 'init_headers'):
+                res.init_headers()
         return res
 
-    gr.routes.templates.TemplateResponse = template_response
+    try:
+        gr.routes.templates.TemplateResponse = template_response
+    except Exception:
+        pass

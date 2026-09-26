@@ -3,11 +3,6 @@ import sys
 import modules.config
 import numpy as np
 import torch
-from extras.GroundingDINO.util.inference import default_groundingdino
-from extras.sam.predictor import SamPredictor
-from rembg import remove, new_session
-from segment_anything import sam_model_registry
-from segment_anything.utils.amg import remove_small_regions
 
 
 class SAMOptions:
@@ -36,6 +31,7 @@ def optimize_masks(masks: torch.Tensor) -> torch.Tensor:
     """
     removes small disconnected regions and holes
     """
+    from segment_anything.utils.amg import remove_small_regions
     fine_masks = []
     for mask in masks.to('cpu').numpy():  # masks: [num_masks, 1, h, w]
         fine_masks.append(remove_small_regions(mask[0], 400, mode="holes")[0])
@@ -55,8 +51,16 @@ def generate_mask_from_image(image: np.ndarray, mask_model: str = 'sam', extras=
     if extras is None:
         extras = {}
 
-    if 'image' in image:
-        image = image['image']
+    if isinstance(image, dict):
+        from modules.util import extract_inpaint_image_and_mask
+        extracted_img, _ = extract_inpaint_image_and_mask(image)
+        if extracted_img is not None:
+            image = extracted_img
+        elif 'image' in image:
+            image = image['image']
+    elif hasattr(image, 'convert'):
+        import numpy as np
+        image = np.array(image.convert('RGB'))
 
     is_yolo = (
         mask_model in getattr(modules.flags, 'yolo_detection_models', []) or
@@ -69,6 +73,7 @@ def generate_mask_from_image(image: np.ndarray, mask_model: str = 'sam', extras=
         return mask_result, box_count, box_count, box_count
 
     if mask_model != 'sam' or sam_options is None:
+        from rembg import remove, new_session
         result = remove(
             image,
             session=new_session(mask_model, **extras),
@@ -77,6 +82,10 @@ def generate_mask_from_image(image: np.ndarray, mask_model: str = 'sam', extras=
         )
 
         return result, dino_detection_count, sam_detection_count, sam_detection_on_mask_count
+
+    from extras.GroundingDINO.util.inference import default_groundingdino
+    from extras.sam.predictor import SamPredictor
+    from segment_anything import sam_model_registry
 
     detections, boxes, logits, phrases = default_groundingdino(
         image=image,

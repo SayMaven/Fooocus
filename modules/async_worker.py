@@ -201,7 +201,7 @@ def worker():
     from extras.expansion import safe_str
     from modules.util import (remove_empty_str, HWC3, resize_image, get_image_shape_ceil, set_image_shape_ceil,
                               get_shape_ceil, resample_image, erode_or_dilate, parse_lora_references_from_prompt,
-                              apply_wildcards)
+                              apply_wildcards, extract_inpaint_image_and_mask, to_numpy_image)
     from modules.upscaler import perform_upscale
     from modules.flags import Performance
     from modules.meta_parser import get_metadata_parser
@@ -974,35 +974,35 @@ def worker():
                 async_task.steps, 1, skip_prompt_processing=skip_prompt_processing)
         if (async_task.current_tab == 'inpaint' or (
                 async_task.current_tab == 'ip' and async_task.mixing_image_prompt_and_inpaint)) \
-                and isinstance(async_task.inpaint_input_image, dict):
-            inpaint_image = async_task.inpaint_input_image['image']
-            inpaint_mask = async_task.inpaint_input_image['mask'][:, :, 0]
+                and async_task.inpaint_input_image is not None:
+            inpaint_image, inpaint_mask = extract_inpaint_image_and_mask(async_task.inpaint_input_image)
 
-            if async_task.inpaint_advanced_masking_checkbox:
-                if isinstance(async_task.inpaint_mask_image_upload, dict):
-                    if (isinstance(async_task.inpaint_mask_image_upload['image'], np.ndarray)
-                            and isinstance(async_task.inpaint_mask_image_upload['mask'], np.ndarray)
-                            and async_task.inpaint_mask_image_upload['image'].ndim == 3):
-                        async_task.inpaint_mask_image_upload = np.maximum(
-                            async_task.inpaint_mask_image_upload['image'],
-                            async_task.inpaint_mask_image_upload['mask'])
-                if isinstance(async_task.inpaint_mask_image_upload,
-                              np.ndarray) and async_task.inpaint_mask_image_upload.ndim == 3:
-                    H, W, C = inpaint_image.shape
-                    async_task.inpaint_mask_image_upload = resample_image(async_task.inpaint_mask_image_upload,
-                                                                          width=W, height=H)
-                    async_task.inpaint_mask_image_upload = np.mean(async_task.inpaint_mask_image_upload, axis=2)
-                    async_task.inpaint_mask_image_upload = (async_task.inpaint_mask_image_upload > 127).astype(
-                        np.uint8) * 255
-                    inpaint_mask = np.maximum(inpaint_mask, async_task.inpaint_mask_image_upload)
+            if async_task.inpaint_advanced_masking_checkbox and async_task.inpaint_mask_image_upload is not None:
+                _, upload_mask = extract_inpaint_image_and_mask(async_task.inpaint_mask_image_upload, is_mask_upload=True)
+                if upload_mask is not None and inpaint_image is not None:
+                    H, W = inpaint_image.shape[:2]
+                    if upload_mask.shape[:2] != (H, W):
+                        try:
+                            import cv2
+                            upload_mask = cv2.resize(upload_mask, (W, H), interpolation=cv2.INTER_NEAREST)
+                        except Exception:
+                            upload_mask = np.array(Image.fromarray(upload_mask).resize((W, H), resample=Image.NEAREST))
+                    if inpaint_mask is None:
+                        inpaint_mask = upload_mask
+                    else:
+                        inpaint_mask = np.maximum(inpaint_mask, upload_mask)
 
-            if int(async_task.inpaint_erode_or_dilate) != 0:
+            if inpaint_mask is None and inpaint_image is not None:
+                inpaint_mask = np.zeros(shape=inpaint_image.shape[:2], dtype=np.uint8)
+
+            if int(async_task.inpaint_erode_or_dilate) != 0 and inpaint_mask is not None:
                 inpaint_mask = erode_or_dilate(inpaint_mask, async_task.inpaint_erode_or_dilate)
 
-            if async_task.invert_mask_checkbox:
+            if async_task.invert_mask_checkbox and inpaint_mask is not None:
                 inpaint_mask = 255 - inpaint_mask
 
-            inpaint_image = HWC3(inpaint_image)
+            if inpaint_image is not None:
+                inpaint_image = HWC3(inpaint_image)
             if isinstance(inpaint_image, np.ndarray) and isinstance(inpaint_mask, np.ndarray) \
                     and (np.any(inpaint_mask > 127) or len(async_task.outpaint_selections) > 0):
                 default_model_path = os.path.join(modules.config.path_upscale_models, 'fooocus_upscaler_s409985e5.bin')
@@ -1065,12 +1065,12 @@ def worker():
         if async_task.current_tab == 'enhance' and async_task.enhance_input_image is not None:
             goals.append('enhance')
             skip_prompt_processing = True
-            async_task.enhance_input_image = HWC3(async_task.enhance_input_image)
+            async_task.enhance_input_image = HWC3(to_numpy_image(async_task.enhance_input_image))
         return base_model_additional_loras, clip_vision_path, controlnet_canny_path, controlnet_cpds_path, inpaint_head_model_path, inpaint_image, inpaint_mask, ip_adapter_face_path, ip_adapter_path, ip_negative_path, skip_prompt_processing, use_synthetic_refiner
 
     def prepare_upscale(async_task, goals, uov_input_image, uov_method, performance, steps, current_progress,
                         advance_progress=False, skip_prompt_processing=False, upscale_model_name=None):
-        uov_input_image = HWC3(uov_input_image)
+        uov_input_image = HWC3(to_numpy_image(uov_input_image))
         if 'vary' in uov_method:
             goals.append('vary')
         elif 'upscale' in uov_method:

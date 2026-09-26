@@ -35,6 +35,8 @@ def try_load_sorted_styles(style_names, default_selected):
 
 def sort_styles(selected):
     global all_styles
+    if selected is None:
+        selected = []
     unselected = [y for y in all_styles if y not in selected]
     sorted_styles = selected + unselected
     try:
@@ -44,7 +46,12 @@ def sort_styles(selected):
         print('Write style sorting failed.')
         print(e)
     all_styles = sorted_styles
-    return gr.update(choices=sorted_styles)
+    if hasattr(gr, 'CheckboxGroup'):
+        try:
+            return gr.CheckboxGroup(choices=sorted_styles, value=selected)
+        except Exception:
+            pass
+    return gr.update(choices=sorted_styles, value=selected)
 
 
 def localization_key(x):
@@ -52,8 +59,18 @@ def localization_key(x):
 
 
 def search_styles(selected, query):
+    global all_styles
+    if selected is None:
+        selected = []
+    if query is None:
+        query = ""
     unselected = [y for y in all_styles if y not in selected]
     matched = [y for y in unselected if query.lower() in localization_key(y).lower()] if len(query.replace(' ', '')) > 0 else []
     unmatched = [y for y in unselected if y not in matched]
     sorted_styles = matched + selected + unmatched
-    return gr.update(choices=sorted_styles)
+    if hasattr(gr, 'CheckboxGroup'):
+        try:
+            return gr.CheckboxGroup(choices=sorted_styles, value=selected)
+        except Exception:
+            pass
+    return gr.update(choices=sorted_styles, value=selected)
