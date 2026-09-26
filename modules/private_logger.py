@@ -14,7 +14,7 @@ log_cache = {}
 
 
 def get_current_html_path(output_format=None):
-    output_format = output_format if output_format else modules.config.default_output_format
+    output_format = output_format if isinstance(output_format, str) and output_format else modules.config.default_output_format
     date_string, local_temp_filename, only_name = generate_temp_filename(folder=modules.config.path_outputs,
                                                                          extension=output_format)
     html_name = os.path.join(os.path.dirname(local_temp_filename), 'log.html')

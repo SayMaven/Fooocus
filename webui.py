@@ -670,7 +670,8 @@ with shared.gradio_root:
                     if args_manager.args.disable_image_log:
                         return gr.update(value='')
 
-                    return gr.update(value=f'<a href="file={get_current_html_path(output_format)}" target="_blank">\U0001F4DA History Log</a>')
+                    html_path = os.path.abspath(get_current_html_path())
+                    return gr.update(value=f'<a href="file={html_path}" target="_blank">\U0001F4DA History Log</a>')
 
                 history_link = gr.HTML()
                 shared.gradio_root.load(update_history_link, outputs=history_link, queue=False, show_progress=False)
@@ -1214,13 +1215,30 @@ def dump_default_english_config():
 
 # dump_default_english_config()
 
+allowed_roots_raw = [
+    getattr(modules.config, 'path_outputs', None),
+    getattr(modules.config, 'temp_path', None),
+    os.path.abspath('outputs'),
+    os.path.abspath('../outputs'),
+    os.path.dirname(os.path.realpath(__file__)),
+]
+allowed_paths = []
+for p in allowed_roots_raw:
+    if p:
+        try:
+            resolved = os.path.realpath(os.path.abspath(p))
+            if resolved not in allowed_paths:
+                allowed_paths.append(resolved)
+        except Exception:
+            pass
+
 launch_kwargs = dict(
     inbrowser=args_manager.args.in_browser,
     server_name=args_manager.args.listen,
     server_port=args_manager.args.port,
     share=args_manager.args.share,
     auth=check_auth if (args_manager.args.share or args_manager.args.listen) and auth_enabled else None,
-    allowed_paths=[modules.config.path_outputs, os.path.dirname(os.path.realpath(__file__))],
+    allowed_paths=allowed_paths,
     blocked_paths=[constants.AUTH_FILENAME]
 )
 
